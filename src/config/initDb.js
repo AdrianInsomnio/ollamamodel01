@@ -1,4 +1,4 @@
-const { getPool } = require('../config/database');
+const { getPool } = require('./connection');
 
 const initDatabase = async () => {
   try {

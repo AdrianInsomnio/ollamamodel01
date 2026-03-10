@@ -1,6 +1,4 @@
-const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { verifyToken } = require('../utils/jwt.util');
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -12,7 +10,7 @@ const authMiddleware = (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyToken(token);
     req.user = decoded;
     next();
   } catch (error) {
@@ -20,8 +18,4 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-const generateToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
-};
-
-module.exports = { authMiddleware, generateToken, JWT_SECRET };
+module.exports = { authMiddleware };
