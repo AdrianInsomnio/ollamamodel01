@@ -1,9 +1,10 @@
-require('dotenv').config();
+const { env } = require('./config/env');
 const app = require('./app');
 const { testConnection } = require('./config/connection');
 const { initDatabase } = require('./config/initDb');
+const { prisma } = require('./lib/prisma');
 
-const PORT = process.env.PORT || 3000;
+const PORT = env.port || 3000;
 
 const startServer = async () => {
   try {
@@ -16,6 +17,10 @@ const startServer = async () => {
       await initDatabase();
     }
 
+    // Connect Prisma
+    await prisma.$connect();
+    console.log('Prisma connected successfully');
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
@@ -23,5 +28,16 @@ const startServer = async () => {
     console.error('Error starting server:', error);
   }
 };
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
 
 startServer();

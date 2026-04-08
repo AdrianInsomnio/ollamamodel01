@@ -1,47 +1,41 @@
-const { getPool } = require('../../config/connection');
+const { prisma } = require('../../lib/prisma');
 
 const findUserByEmail = async (email) => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id, username, email, password FROM users WHERE email = ?',
-    [email]
-  );
-  return users[0] || null;
+  return await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, username: true, email: true, password: true }
+  });
 };
 
 const findUserById = async (id) => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id, username, email, created_at FROM users WHERE id = ?',
-    [id]
-  );
-  return users[0] || null;
+  return await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, username: true, email: true, createdAt: true }
+  });
 };
 
 const findUserByEmailOrUsername = async (email, username) => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id FROM users WHERE email = ? OR username = ?',
-    [email, username]
-  );
-  return users.length > 0;
+  return await prisma.user.findFirst({
+    where: {
+      OR: [{ email }, { username }]
+    }
+  });
 };
 
 const createUser = async (username, email, hashedPassword) => {
-  const pool = getPool();
-  const [result] = await pool.query(
-    'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-    [username, email, hashedPassword]
-  );
-  return { id: result.insertId, username, email };
+  return await prisma.user.create({
+    data: {
+      username,
+      email,
+      password: hashedPassword
+    }
+  });
 };
 
 const getAllUsers = async () => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id, username, email, created_at FROM users'
-  );
-  return users;
+  return await prisma.user.findMany({
+    select: { id: true, username: true, email: true, createdAt: true }
+  });
 };
 
 module.exports = {

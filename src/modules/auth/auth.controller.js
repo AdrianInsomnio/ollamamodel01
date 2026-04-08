@@ -4,10 +4,6 @@ const register = async (req, res, next) => {
   try {
     const { username, password, email } = req.body;
 
-    if (!username || !password || !email) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-
     const { user, token } = await authService.register(username, email, password);
 
     res.status(201).json({

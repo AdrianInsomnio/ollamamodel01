@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 
 const { errorMiddleware } = require('./core/middlewares/error.middleware');
 const routes = require('./routes');
+const { httpLogger } = require('./core/middlewares/logger.middleware');
+const { logger } = require('./lib/loger');
 
 const app = express();
 
@@ -13,6 +15,7 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+app.use(httpLogger);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -22,8 +25,17 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
+// Auth rate limiting (more strict)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs for auth endpoints
+  message: { error: 'Too many authentication attempts, please try again later' }
+});
+app.use('/api/auth', authLimiter);
+
 // Health check
 app.get('/health', (req, res) => {
+  logger.info('Health check endpoint hit');
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 

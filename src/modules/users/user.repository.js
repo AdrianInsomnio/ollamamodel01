@@ -1,20 +1,16 @@
-const { getPool } = require('../../config/connection');
+const { prisma } = require('../../lib/prisma');
 
 const findUserById = async (id) => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id, username, email, created_at FROM users WHERE id = ?',
-    [id]
-  );
-  return users[0] || null;
+  return await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, username: true, email: true, createdAt: true }
+  });
 };
 
 const getAllUsers = async () => {
-  const pool = getPool();
-  const [users] = await pool.query(
-    'SELECT id, username, email, created_at FROM users'
-  );
-  return users;
+  return await prisma.user.findMany({
+    select: { id: true, username: true, email: true, createdAt: true }
+  });
 };
 
 module.exports = { findUserById, getAllUsers };
