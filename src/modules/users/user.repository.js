@@ -1,15 +1,16 @@
 const { prisma } = require('../../lib/prisma');
 
-const findUserById = async (id) => {
-  return await prisma.user.findUnique({
-    where: { id },
-    select: { id: true, username: true, email: true, createdAt: true }
+const findUserById = async (id, organizationId) => {
+  return await prisma.user.findFirst({
+    where: { id, organizationId },
+    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
   });
 };
 
-const getAllUsers = async () => {
+const getAllUsers = async (organizationId) => {
   return await prisma.user.findMany({
-    select: { id: true, username: true, email: true, createdAt: true }
+    where: { organizationId },
+    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
   });
 };
 

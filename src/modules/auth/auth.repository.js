@@ -1,40 +1,43 @@
 const { prisma } = require('../../lib/prisma');
 
-const findUserByEmail = async (email) => {
-  return await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, username: true, email: true, password: true }
+const findUserByEmail = async (email, organizationId) => {
+  return await prisma.user.findFirst({
+    where: { email, organizationId },
+    select: { id: true, username: true, email: true, password: true, organizationId: true }
   });
 };
 
-const findUserById = async (id) => {
+const findUserById = async (id, organizationId) => {
   return await prisma.user.findUnique({
     where: { id },
-    select: { id: true, username: true, email: true, createdAt: true }
+    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
   });
 };
 
-const findUserByEmailOrUsername = async (email, username) => {
+const findUserByEmailOrUsername = async (email, username, organizationId) => {
   return await prisma.user.findFirst({
     where: {
+      organizationId,
       OR: [{ email }, { username }]
     }
   });
 };
 
-const createUser = async (username, email, hashedPassword) => {
+const createUser = async (username, email, hashedPassword, organizationId) => {
   return await prisma.user.create({
     data: {
       username,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      organizationId
     }
   });
 };
 
-const getAllUsers = async () => {
+const getAllUsers = async (organizationId) => {
   return await prisma.user.findMany({
-    select: { id: true, username: true, email: true, createdAt: true }
+    where: { organizationId },
+    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
   });
 };
 
