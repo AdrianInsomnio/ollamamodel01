@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  // url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 //////////////////////
@@ -14,7 +14,13 @@ datasource db {
 model Organization {
   id        Int      @id @default(autoincrement())
   name      String
+  address   String?
+  phone     String?
+  email     String?
+  taxId     String? // RUT, CI, etc.
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users         User[]
   refreshTokens RefreshToken[]
@@ -32,12 +38,15 @@ model Organization {
 //////////////////////
 
 model User {
-  id             Int      @id @default(autoincrement())
-  username       String   @unique @db.VarChar(50)
-  email          String   @unique @db.VarChar(100)
-  password       String   @db.VarChar(255)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id             Int       @id @default(autoincrement())
+  username       String    @unique @db.VarChar(50)
+  email          String    @unique @db.VarChar(100)
+  password       String    @db.VarChar(255)
+  role           String    @default("user") // admin, vet, assistant
+  isActive       Boolean   @default(true)
+  lastLogin      DateTime?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   organizationId Int
 
   organization  Organization   @relation(fields: [organizationId], references: [id])
@@ -66,18 +75,26 @@ model RefreshToken {
 //////////////////////
 
 model Client {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   name           String
+  documentId     String?   @unique // CI, RUT, etc.
   phone          String?
+  phone2         String? // teléfono secundario
   email          String?
+  address        String?
+  birthDate      DateTime?
+  notes          String?
+  isActive       Boolean   @default(true)
   organizationId Int
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  pets          Pet[]
-  sales         Sale[]
-  appointments  Appointment[]
-  consultations Consultation[]
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  pets            Pet[]
+  sales           Sale[]
+  appointments    Appointment[]
+  consultations   Consultation[]
+  fiscalDocuments FiscalDocument[]
 }
 
 //////////////////////
@@ -85,13 +102,20 @@ model Client {
 //////////////////////
 
 model Pet {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   name           String
   species        String
   breed          String?
+  birthDate      DateTime?
+  weight         Float? // en kg
+  color          String?
+  microchip      String?   @unique
+  isActive       Boolean   @default(true)
+  notes          String?
   clientId       Int
   organizationId Int
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   client        Client         @relation(fields: [clientId], references: [id])
   organization  Organization   @relation(fields: [organizationId], references: [id])
@@ -107,10 +131,15 @@ model Pet {
 model Appointment {
   id             Int      @id @default(autoincrement())
   date           DateTime
-  status         String
+  duration       Int      @default(30) // duración en minutos
+  status         String   @default("pending") // pending, confirmed, completed, cancelled
+  serviceType    String? // consulta, grooming, vacunación, etc.
+  notes          String?
   clientId       Int
   petId          Int
   organizationId Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   client       Client        @relation(fields: [clientId], references: [id])
   pet          Pet           @relation(fields: [petId], references: [id])
@@ -123,23 +152,38 @@ model Appointment {
 //////////////////////
 
 model Consultation {
-  id             Int      @id @default(autoincrement())
+  id             Int  @id @default(autoincrement())
   petId          Int
   clientId       Int
-  appointmentId  Int?     @unique
+  appointmentId  Int? @unique
   organizationId Int
-  notes          String?
-  createdAt      DateTime @default(now())
+
+  // Datos clínicos
+  weight      Float? // peso en kg
+  temperature Float? // temperatura en °C
+  symptoms    String? // síntomas presentados
+  diagnosis   String? // diagnóstico principal
+  treatment   String? // tratamiento aplicado
+  notes       String? // notas adicionales
+
+  // Costos
+  consultationFee Float @default(0)
+  treatmentFee    Float @default(0)
+  totalFee        Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   pet          Pet          @relation(fields: [petId], references: [id])
   client       Client       @relation(fields: [clientId], references: [id])
   appointment  Appointment? @relation(fields: [appointmentId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
 
-  diagnoses     Diagnosis[]
-  treatments    Treatment[]
-  prescriptions Prescription[]
-  sales         Sale[]
+  diagnoses       Diagnosis[]
+  treatments      Treatment[]
+  prescriptions   Prescription[]
+  sales           Sale[]
+  fiscalDocuments FiscalDocument[]
 }
 
 model Diagnosis {
@@ -173,21 +217,44 @@ model Prescription {
 model Product {
   id             Int      @id @default(autoincrement())
   name           String
+  description    String?
+  category       String? // medicamentos, alimentos, accesorios, etc.
   price          Float
+  cost           Float? // costo de compra
+  stock          Int      @default(0)
+  minStock       Int      @default(5) // stock mínimo para alertas
+  isActive       Boolean  @default(true)
   organizationId Int
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  stockMovements StockMovement[]
 
   @@map("products")
+}
+
+model ProductCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("product_categories")
 }
 
 model Service {
   id             Int      @id @default(autoincrement())
   name           String
+  description    String?
   price          Float
+  duration       Int? // duración estimada en minutos
+  category       String? // consulta, grooming, vacunación, etc.
+  isActive       Boolean  @default(true)
   organizationId Int
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
@@ -199,14 +266,25 @@ model Service {
 //////////////////////
 
 model Sale {
-  id             Int      @id @default(autoincrement())
+  id             Int  @id @default(autoincrement())
   clientId       Int
   petId          Int?
   consultationId Int?
   organizationId Int
-  total          Float
-  status         String
-  createdAt      DateTime @default(now())
+
+  // Montos
+  subtotal Float @default(0) // suma de items sin impuestos
+  discount Float @default(0) // descuento aplicado
+  tax      Float @default(0) // IVA (14% en Uruguay)
+  total    Float @default(0) // total final
+
+  // Estado y método de pago
+  status        String  @default("completed") // pending, completed, cancelled
+  paymentMethod String? // cash, card, transfer, etc.
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   client       Client        @relation(fields: [clientId], references: [id])
   pet          Pet?          @relation(fields: [petId], references: [id])
@@ -236,12 +314,17 @@ model SaleItem {
 model StockMovement {
   id            Int      @id @default(autoincrement())
   productId     Int
-  type          String
-  quantity      Int
-  referenceType String
-  referenceId   Int
+  type          String // 'in' (entrada), 'out' (salida), 'adjustment' (ajuste)
+  quantity      Int // cantidad (positiva para entrada, negativa para salida)
+  reason        String? // motivo del movimiento
+  referenceType String? // 'sale', 'purchase', 'adjustment', etc.
+  referenceId   Int? // ID de la venta, compra, etc.
+  notes         String?
   createdAt     DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
 }
+
 
 //////////////////////
 // 📎 ATTACHMENTS   //
@@ -268,4 +351,89 @@ model IdempotencyKey {
   createdAt  DateTime @default(now())
 
   @@unique([key, endpoint])
+}
+
+//////////////////////
+// 🧾 FISCAL DOCUMENTS //
+//////////////////////
+
+enum PaymentMethod {
+  CASH
+  DEBIT_CARD
+  CREDIT_CARD
+  BANK_TRANSFER
+  MERCADO_PAGO
+  ACCOUNT_CREDIT // fiado / cuenta corriente
+}
+
+enum FiscalDocumentType {
+  E_TICKET
+  E_FACTURA
+  E_TICKET_NOTA_CREDITO
+}
+
+enum FiscalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FiscalDocument {
+  id       String             @id @default(cuid())
+  type     FiscalDocumentType
+  series   String?
+  number   Int?
+  issuedAt DateTime           @default(now())
+
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id])
+
+  consultationId Int?
+  consultation   Consultation? @relation(fields: [consultationId], references: [id])
+
+  subtotal Decimal
+  tax      Decimal
+  total    Decimal
+  currency String  @default("UYU")
+
+  cae           String?
+  caeExpiration DateTime?
+  cfeXml        String?
+  cfePdfUrl     String?
+
+  status FiscalStatus @default(PENDING)
+
+  items    FiscalItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+}
+
+model FiscalItem {
+  id               String         @id @default(cuid())
+  fiscalDocumentId String
+  fiscalDocument   FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+
+  description String
+  quantity    Decimal
+  unitPrice   Decimal
+  taxRate     Decimal
+  total       Decimal
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  fiscalDocumentId String
+  fiscalDocument   FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+
+  amount Decimal
+  method PaymentMethod
+
+  reference String? // nro voucher, transferencia, etc
+  notes     String?
+
+  paidAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
 }
