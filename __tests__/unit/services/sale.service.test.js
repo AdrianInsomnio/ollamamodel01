@@ -154,18 +154,41 @@ describe('Sale Service', () => {
     it('debería aplicar descuento correctamente', async () => {
       // Arrange
       const discount = 10; // 10%
-      const subtotal = 200;
+      const productPrice = 100; // Precio fijo para el test
+      const quantity = 2; // Cantidad fija
+      const subtotal = productPrice * quantity; // 200
       const discountAmount = subtotal * (discount / 100); // 20
       const taxableAmount = subtotal - discountAmount; // 180
       const tax = taxableAmount * 0.14; // 25.2
       const total = taxableAmount + tax; // 205.2
 
-      const saleDataWithDiscount = { ...mockSaleData, discount };
+      // Crear datos específicos para este test
+      const testProduct = {
+        id: 1,
+        name: 'Test Product',
+        price: productPrice,
+        stock: 10,
+        isActive: true,
+        organizationId
+      };
+
+      const saleDataWithDiscount = {
+        clientId: mockClient.id,
+        items: [
+          {
+            itemType: 'product',
+            itemId: testProduct.id,
+            quantity: quantity
+          }
+        ],
+        paymentMethod: 'cash',
+        discount
+      };
 
       mockClientRepository.findById.mockResolvedValue(mockClient);
-      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
+      mockProductRepository.findByIds.mockResolvedValue([testProduct]);
       mockSaleRepository.createWithStockMovements.mockResolvedValue({
-        id: faker.number.int(),
+        id: 1,
         ...saleDataWithDiscount,
         subtotal,
         discount: discountAmount,
