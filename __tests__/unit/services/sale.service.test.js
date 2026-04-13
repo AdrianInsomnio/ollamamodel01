@@ -163,7 +163,7 @@ describe('Sale Service', () => {
       const saleDataWithDiscount = { ...mockSaleData, discount };
 
       mockClientRepository.findById.mockResolvedValue(mockClient);
-      mockProductRepository.findByIds.mockResolvedValue([lowStockProduct]);
+      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
       mockSaleRepository.createWithStockMovements.mockResolvedValue({
         id: faker.number.int(),
         ...saleDataWithDiscount,

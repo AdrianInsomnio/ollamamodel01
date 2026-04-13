@@ -142,5 +142,3 @@ module.exports = {
   getSalesByClient,
   getTotalSalesByPeriod
 };
-
-module.exports = { create, findAll, findById };

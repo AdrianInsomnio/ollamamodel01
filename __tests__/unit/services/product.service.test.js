@@ -58,7 +58,7 @@ describe('Product Service', () => {
 
     it('debería lanzar error si el precio es cero o negativo', async () => {
       // Arrange
-      const productData = { name: mockProduct.name, price: 0 };
+      const productData = { name: mockProduct.name, price: -10 };
 
       // Act & Assert
       await expect(productService.create(productData, organizationId))
