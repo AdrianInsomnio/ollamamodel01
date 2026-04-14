@@ -27,6 +27,29 @@ const getById = async (req, res, next) => {
   }
 };
 
+const getAvailableSlots = async (req, res, next) => {
+  try {
+    const date = req.query.date ? new Date(req.query.date) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+      return res.status(400).json({ error: 'Valid date is required' });
+    }
+
+    const slots = await service.getAvailableSlots(date, req.user.organizationId);
+    res.json({ slots });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateStatus = async (req, res, next) => {
+  try {
+    const item = await service.updateStatus(parseInt(req.params.id), req.user.organizationId, req.body.status);
+    res.json({ appointment: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const update = async (req, res, next) => {
   try {
     const item = await service.update(parseInt(req.params.id), req.user.organizationId, req.body);
@@ -45,4 +68,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, remove };
+module.exports = { create, getAll, getById, getAvailableSlots, updateStatus, update, remove };

@@ -5,20 +5,45 @@ const create = async (data, organizationId) => {
     data: {
       ...data,
       organizationId
+    },
+    include: {
+      category: true
     }
   });
 };
 
-const findAll = async (organizationId) => {
+const findAll = async (organizationId, options = {}) => {
+  const { includeDiscontinued = false, categoryId } = options;
+
+  const where = { organizationId };
+
+  if (!includeDiscontinued) {
+    where.discontinuedAt = null;
+  }
+
+  if (categoryId) {
+    where.categoryId = parseInt(categoryId);
+  }
+
   return await prisma.product.findMany({
-    where: { organizationId },
+    where,
+    include: {
+      category: true
+    },
     orderBy: { name: 'asc' }
   });
 };
 
 const findById = async (id, organizationId) => {
   return await prisma.product.findFirst({
-    where: { id, organizationId }
+    where: { id, organizationId },
+    include: {
+      category: true,
+      stockMovements: {
+        orderBy: { createdAt: 'desc' },
+        take: 10
+      }
+    }
   });
 };
 
@@ -34,7 +59,10 @@ const findByIds = async (ids, organizationId) => {
 const update = async (id, organizationId, data) => {
   return await prisma.product.update({
     where: { id },
-    data
+    data,
+    include: {
+      category: true
+    }
   });
 };
 
