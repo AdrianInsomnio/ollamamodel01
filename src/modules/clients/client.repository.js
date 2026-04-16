@@ -49,6 +49,46 @@ const findByDocumentId = async (documentId, organizationId) => {
   });
 };
 
+const search = async (query, organizationId) => {
+  const searchQuery = query.trim();
+  return await prisma.client.findMany({
+    where: {
+      organizationId,
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { documentId: { contains: searchQuery, mode: 'insensitive' } },
+        { phone: { contains: searchQuery } }
+      ]
+    },
+    include: {
+      pets: true,
+      _count: {
+        select: { sales: true, appointments: true }
+      }
+    },
+    take: 20,
+    orderBy: { name: 'asc' }
+  });
+};
+
+const createWithPet = async (clientData, petData, organizationId) => {
+  return await prisma.client.create({
+    data: {
+      ...clientData,
+      organizationId,
+      pets: {
+        create: {
+          ...petData,
+          organizationId
+        }
+      }
+    },
+    include: {
+      pets: true
+    }
+  });
+};
+
 const getClientHistory = async (id, organizationId) => {
   return await prisma.client.findFirst({
     where: { id, organizationId },
@@ -95,6 +135,8 @@ module.exports = {
   findById,
   findByEmail,
   findByDocumentId,
+  search,
+  createWithPet,
   getClientHistory,
   update,
   remove

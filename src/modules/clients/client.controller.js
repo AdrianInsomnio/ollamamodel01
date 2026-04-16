@@ -45,4 +45,23 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, remove };
+const search = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    const items = await service.search(q, req.user.organizationId);
+    res.json({ clients: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createWithPet = async (req, res, next) => {
+  try {
+    const item = await service.createWithPet(req.body, req.user.organizationId);
+    res.status(201).json({ client: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getAll, getById, update, remove, search, createWithPet };

@@ -45,4 +45,13 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, remove };
+const getFullHistory = async (req, res, next) => {
+  try {
+    const history = await service.getFullHistory(parseInt(req.params.id), req.user.organizationId);
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getAll, getById, update, remove, getFullHistory };

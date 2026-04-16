@@ -4,6 +4,8 @@ const { authMiddleware } = require('../../core/middlewares/auth.middleware');
 const controller = require('./client.controller');
 
 router.use(authMiddleware);
+router.get('/search', controller.search);
+router.post('/with-pet', controller.createWithPet);
 router.post('/', controller.create);
 router.get('/', controller.getAll);
 router.get('/:id', controller.getById);

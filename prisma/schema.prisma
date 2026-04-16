@@ -171,6 +171,10 @@ model Consultation {
   treatmentFee    Float @default(0)
   totalFee        Float @default(0)
 
+  // Estado del MVP
+  status    String    @default("OPEN") // OPEN, CLOSED
+  closedAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -50,4 +50,30 @@ const remove = async (id, organizationId) => {
   });
 };
 
-module.exports = { create, findAll, findById, update, remove };
+const getFullHistory = async (id, organizationId) => {
+  return await prisma.pet.findFirst({
+    where: { id, organizationId },
+    include: {
+      client: true,
+      consultations: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          diagnoses: true,
+          treatments: true,
+          prescriptions: true
+        }
+      },
+      appointments: {
+        orderBy: { date: 'desc' }
+      },
+      sales: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true
+        }
+      }
+    }
+  });
+};
+
+module.exports = { create, findAll, findById, update, remove, getFullHistory };
