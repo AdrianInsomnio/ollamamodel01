@@ -3,7 +3,7 @@ const { prisma } = require('../../lib/prisma');
 const findUserByEmail = async (email, organizationId) => {
   return await prisma.user.findFirst({
     where: { email, organizationId },
-    select: { id: true, username: true, email: true, password: true, organizationId: true }
+    select: { id: true, username: true, email: true, password: true, organizationId: true, role: true }
   });
 };
 
