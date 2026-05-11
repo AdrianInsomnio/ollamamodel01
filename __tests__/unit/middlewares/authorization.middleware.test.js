@@ -1,4 +1,5 @@
 const { authorize, authorizeOwnerOrAdmin, authorizeOrganization } = require('../../../src/core/middlewares/authorization.middleware');
+const { ROLES } = require('../../../src/core/constants/roles');
 
 describe('Authorization Middleware', () => {
   let req;
@@ -22,8 +23,8 @@ describe('Authorization Middleware', () => {
   describe('authorize', () => {
     it('debería permitir acceso si el rol está autorizado', () => {
       // Arrange
-      req.user = { id: 1, role: 'admin' };
-      const middleware = authorize('admin', 'vet');
+      req.user = { id: 1, role: ROLES.ADMIN };
+      const middleware = authorize(ROLES.ADMIN, ROLES.VET);
 
       // Act
       middleware(req, res, next);
@@ -35,8 +36,8 @@ describe('Authorization Middleware', () => {
 
     it('debería permitir acceso si el rol es uno de los permitidos', () => {
       // Arrange
-      req.user = { id: 1, role: 'vet' };
-      const middleware = authorize('admin', 'vet', 'assistant');
+      req.user = { id: 1, role: ROLES.VET };
+      const middleware = authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER);
 
       // Act
       middleware(req, res, next);
@@ -47,8 +48,8 @@ describe('Authorization Middleware', () => {
 
     it('debería denegar acceso si el rol no está autorizado', () => {
       // Arrange
-      req.user = { id: 1, role: 'assistant' };
-      const middleware = authorize('admin');
+      req.user = { id: 1, role: ROLES.USER };
+      const middleware = authorize(ROLES.ADMIN);
 
       // Act
       middleware(req, res, next);
@@ -57,8 +58,8 @@ describe('Authorization Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         error: 'Access denied',
-        message: 'This resource requires one of the following roles: admin',
-        currentRole: 'assistant'
+        message: 'This resource requires one of the following roles: ADMIN',
+        currentRole: ROLES.USER
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -66,7 +67,7 @@ describe('Authorization Middleware', () => {
     it('debería retornar 401 si no hay usuario autenticado', () => {
       // Arrange
       req.user = null;
-      const middleware = authorize('admin');
+      const middleware = authorize(ROLES.ADMIN);
 
       // Act
       middleware(req, res, next);
@@ -79,8 +80,8 @@ describe('Authorization Middleware', () => {
 
     it('debería funcionar con múltiples roles permitidos', () => {
       // Arrange
-      req.user = { id: 1, role: 'vet' };
-      const middleware = authorize('admin', 'vet', 'assistant');
+      req.user = { id: 1, role: ROLES.VET };
+      const middleware = authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER);
 
       // Act
       middleware(req, res, next);
@@ -93,9 +94,9 @@ describe('Authorization Middleware', () => {
   describe('authorizeOwnerOrAdmin', () => {
     it('debería permitir acceso si es el propietario del recurso', async () => {
       // Arrange
-      req.user = { id: 1, role: 'assistant' };
+      req.user = { id: 1, role: ROLES.USER };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
-      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, 'admin');
+      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, ROLES.ADMIN);
 
       // Act
       await middleware(req, res, next);
@@ -107,9 +108,9 @@ describe('Authorization Middleware', () => {
 
     it('debería permitir acceso si tiene rol administrativo', async () => {
       // Arrange
-      req.user = { id: 2, role: 'admin' };
+      req.user = { id: 2, role: ROLES.ADMIN };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
-      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, 'admin', 'vet');
+      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, ROLES.ADMIN, ROLES.VET);
 
       // Act
       await middleware(req, res, next);
@@ -120,9 +121,9 @@ describe('Authorization Middleware', () => {
 
     it('debería denegar acceso si no es propietario ni admin', async () => {
       // Arrange
-      req.user = { id: 3, role: 'assistant' };
+      req.user = { id: 3, role: ROLES.USER };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
-      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, 'admin');
+      const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, ROLES.ADMIN);
 
       // Act
       await middleware(req, res, next);
@@ -139,7 +140,7 @@ describe('Authorization Middleware', () => {
     it('debería retornar 401 si no hay usuario autenticado', async () => {
       // Arrange
       req.user = null;
-      const middleware = authorizeOwnerOrAdmin(() => 1, 'admin');
+      const middleware = authorizeOwnerOrAdmin(() => 1, ROLES.ADMIN);
 
       // Act
       await middleware(req, res, next);

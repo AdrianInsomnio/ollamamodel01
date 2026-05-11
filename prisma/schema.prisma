@@ -42,7 +42,7 @@ model User {
   username       String    @unique @db.VarChar(50)
   email          String    @unique @db.VarChar(100)
   password       String    @db.VarChar(255)
-  role           String    @default("USER") // ADMIN, VET, ASSISTANT, SUPERADMIN
+  role           String    @default("USER") // ADMIN, VET, USER, SUPER_ADMIN
   isActive       Boolean   @default(true)
   lastLogin      DateTime?
   createdAt      DateTime  @default(now()) @map("created_at")

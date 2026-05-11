@@ -7,10 +7,11 @@ jest.mock("express-rate-limit", () => {
 
 const request = require("supertest");
 const app = require("../../src/app");
+const { createAuthToken } = require("../fixtures/authToken");
 
 describe("Sales Integration Tests", () => {
   // JWT de prueba válido
-  const validToken = "Bearer test-valid-jwt-token";
+  const validToken = createAuthToken();
 
   describe("Autorización de Endpoints", () => {
     it("debería devolver error 401 sin token de autenticación", async () => {

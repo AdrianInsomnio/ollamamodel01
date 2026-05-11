@@ -3,6 +3,7 @@ const { hashPassword, comparePassword } = require('../../core/utils/password.uti
 const { generateToken } = require('../../core/utils/jwt.util');
 const userRepository = require('./auth.repository');
 const { prisma } = require('../../lib/prisma');
+const { ROLES } = require('../../core/constants/roles');
 
 const register = async (username, email, password) => {
   // Check if user exists in any organization
@@ -30,7 +31,8 @@ const register = async (username, email, password) => {
     username,
     email,
     hashedPassword,
-    organization.id
+    organization.id,
+    ROLES.ADMIN
   );
 
   // Generate token with organizationId
@@ -39,7 +41,7 @@ const register = async (username, email, password) => {
     username: user.username,
     email: user.email,
     organizationId: organization.id,
-    role: user.role || 'ADMIN'
+    role: user.role || ROLES.ADMIN
   });
 
   return {
@@ -68,7 +70,7 @@ const login = async (email, password, organizationId) => {
     username: user.username,
     email: user.email,
     organizationId: user.organizationId,
-    role: user.role || 'USER'
+    role: user.role || ROLES.USER
   });
 
   const { password: _, ...userWithoutPassword } = user;
