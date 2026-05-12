@@ -24,15 +24,16 @@ const findById = async (id, organizationId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.service.update({
-    where: { id },
+    where: { id, organizationId },
     data
   });
 };
 
 const remove = async (id, organizationId) => {
   return await prisma.service.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
 module.exports = { create, findAll, findById, update, remove };
+

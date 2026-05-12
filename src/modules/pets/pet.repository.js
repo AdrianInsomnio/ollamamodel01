@@ -39,14 +39,14 @@ const findById = async (id, organizationId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.pet.update({
-    where: { id },
+    where: { id, organizationId },
     data
   });
 };
 
 const remove = async (id, organizationId) => {
   return await prisma.pet.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
@@ -77,3 +77,4 @@ const getFullHistory = async (id, organizationId) => {
 };
 
 module.exports = { create, findAll, findById, update, remove, getFullHistory };
+

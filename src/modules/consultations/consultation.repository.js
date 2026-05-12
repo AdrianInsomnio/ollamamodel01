@@ -122,7 +122,7 @@ const removePrescription = async (prescriptionId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.consultation.update({
-    where: { id },
+    where: { id, organizationId },
     data,
     include: {
       pet: true,
@@ -147,13 +147,13 @@ const remove = async (id, organizationId) => {
   await prisma.prescription.deleteMany({ where: { consultationId: id } });
 
   return await prisma.consultation.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
 const updateStatus = async (id, status, closedAt = null) => {
   return await prisma.consultation.update({
-    where: { id },
+    where: { id, organizationId },
     data: {
       status,
       ...(closedAt && { closedAt })
@@ -184,3 +184,4 @@ module.exports = {
   remove,
   updateStatus
 };
+
