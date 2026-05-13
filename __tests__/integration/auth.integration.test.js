@@ -1,4 +1,4 @@
-// Mock completo del mÃ³dulo prisma ANTES de cualquier importaciÃ³n
+// Mock completo del módulo prisma ANTES de cualquier importación
 jest.mock("../../src/lib/prisma", () => ({
   prisma: {
     user: {
@@ -65,7 +65,7 @@ describe("Auth Integration Tests", () => {
       password: "password123",
     };
 
-    it("deberÃ­a registrar un usuario y devolver token", async () => {
+    it("debería registrar un usuario y devolver token", async () => {
       // Arrange
       const mockOrganization = createTestOrganization({
         name: "testuser's Organization",
@@ -99,7 +99,7 @@ describe("Auth Integration Tests", () => {
       expect(response.body.user.email).toBe(validRegisterData.email);
     });
 
-    it("deberÃ­a devolver error 400 si faltan campos requeridos", async () => {
+    it("debería devolver error 400 si faltan campos requeridos", async () => {
       // Act
       const response = await request(app)
         .post("/api/auth/register")
@@ -107,10 +107,11 @@ describe("Auth Integration Tests", () => {
         .expect(400);
 
       // Assert
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a devolver error 400 si el usuario ya existe", async () => {
+    it("debería devolver error 400 si el usuario ya existe", async () => {
       // Arrange
       const existingUser = createTestUser(1);
       mockPrisma.user.findFirst.mockResolvedValue(existingUser);
@@ -122,7 +123,8 @@ describe("Auth Integration Tests", () => {
         .expect(400);
 
       // Assert
-      expect(response.body).toHaveProperty("error", "User already exists");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message", "User already exists");
     });
   });
 
@@ -133,7 +135,7 @@ describe("Auth Integration Tests", () => {
       organizationId: 1,
     };
 
-    it("deberÃ­a hacer login y devolver token", async () => {
+    it("debería hacer login y devolver token", async () => {
       // Arrange
       const mockUser = createTestUser(validLoginData.organizationId, {
         email: validLoginData.email,
@@ -157,7 +159,7 @@ describe("Auth Integration Tests", () => {
       expect(response.body.user.email).toBe(validLoginData.email);
     });
 
-    it("deberÃ­a devolver error 400 si faltan campos requeridos", async () => {
+    it("debería devolver error 400 si faltan campos requeridos", async () => {
       // Act
       const response = await request(app)
         .post("/api/auth/login")
@@ -165,10 +167,11 @@ describe("Auth Integration Tests", () => {
         .expect(400);
 
       // Assert
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a devolver error 401 si las credenciales son invÃ¡lidas", async () => {
+    it("debería devolver error 401 si las credenciales son inválidas", async () => {
       // Arrange
       mockUserRepository.findUserByEmail.mockResolvedValue(null);
 
@@ -179,12 +182,13 @@ describe("Auth Integration Tests", () => {
         .expect(401);
 
       // Assert
-      expect(response.body).toHaveProperty("error", "Invalid credentials");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message", "Invalid credentials");
     });
   });
 
   describe("Rate Limiting", () => {
-    it("deberÃ­a responder correctamente a requests de auth (rate limiting mockeado)", async () => {
+    it("debería responder correctamente a requests de auth (rate limiting mockeado)", async () => {
       // Arrange
       mockUserRepository.findUserByEmail.mockResolvedValue(null);
 
@@ -199,7 +203,8 @@ describe("Auth Integration Tests", () => {
         .expect(401);
 
       // Assert
-      expect(response.body).toHaveProperty('error', 'Invalid credentials');
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message", "Invalid credentials");
     });
   });
 });

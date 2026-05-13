@@ -1,4 +1,4 @@
-// ConfiguraciÃ³n global para tests
+// Configuración global para tests
 const { faker } = require('@faker-js/faker');
 
 // Hacer faker disponible globalmente
@@ -8,7 +8,14 @@ global.faker = faker;
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test_jwt_secret_key_for_testing_only';
 process.env.JWT_EXPIRES_IN = '1h';
-process.env.DATABASE_URL = 'mysql://test:test@localhost:3306/test_db';
+
+// Usar credenciales del entorno de desarrollo para tests de integración
+// Los tests unitarios usan mocks de Prisma
+process.env.DB_HOST = 'localhost';
+process.env.DB_USER = 'root';
+process.env.DB_PASSWORD = 'Dev1234';
+process.env.DB_NAME = 'ollmodel_test';
+process.env.DATABASE_URL = 'mysql://root:Dev1234@localhost/ollmodel_test';
 
 // Configurar timezone para consistencia en tests
 process.env.TZ = 'UTC';
@@ -26,7 +33,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  // Restaurar logs despuÃ©s de tests
+  // Restaurar logs después de tests
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
   console.warn = originalConsoleWarn;
@@ -35,7 +42,7 @@ afterAll(() => {
 // Configurar Jest para manejar async operations
 jest.setTimeout(10000);
 
-// Limpiar mocks despuÃ©s de cada test
+// Limpiar mocks después de cada test
 afterEach(() => {
   jest.clearAllMocks();
 });

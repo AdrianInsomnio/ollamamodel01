@@ -1,5 +1,5 @@
-// Tests de IntegraciÃ³n E2E para Appointments
-// Estos tests verifican los endpoints de citas con autenticaciÃ³n
+// Tests de Integración E2E para Appointments
+// Estos tests verifican los endpoints de citas con autenticación
 
 jest.mock("express-rate-limit", () => {
   return jest.fn(() => (req, res, next) => next());
@@ -10,50 +10,54 @@ const app = require("../../src/app");
 const { createAuthToken } = require("../fixtures/authToken");
 
 describe("Appointments Integration Tests", () => {
-  // JWT de prueba vÃ¡lido
+  // JWT de prueba válido
   const validToken = createAuthToken();
 
-  describe("AutorizaciÃ³n de Endpoints", () => {
-    it("deberÃ­a devolver error 401 sin token de autenticaciÃ³n", async () => {
+  describe("Autorización de Endpoints", () => {
+    it("debería devolver error 401 sin token de autenticación", async () => {
       const response = await request(app)
         .get("/api/appointments")
         .expect(401);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a devolver error 401 con token invÃ¡lido", async () => {
+    it("debería devolver error 401 con token inválido", async () => {
       const response = await request(app)
         .get("/api/appointments")
         .set("Authorization", "Bearer invalid-token")
         .expect(401);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
   });
 
-  describe("ValidaciÃ³n de Datos", () => {
-    it("deberÃ­a rechazar POST con body vacÃ­o (400)", async () => {
+  describe("Validación de Datos", () => {
+    it("debería rechazar POST con body vacío (400)", async () => {
       const response = await request(app)
         .post("/api/appointments")
         .set("Authorization", validToken)
         .send({})
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a rechazar POST sin campos requeridos (400)", async () => {
+    it("debería rechazar POST sin campos requeridos (400)", async () => {
       const response = await request(app)
         .post("/api/appointments")
         .set("Authorization", validToken)
         .send({ notes: "Sin campos requeridos" })
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a rechazar fecha en el pasado (400)", async () => {
+    it("debería rechazar fecha en el pasado (400)", async () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 1);
 
@@ -67,32 +71,35 @@ describe("Appointments Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
   });
 
   describe("Estructura de Respuestas", () => {
-    it("deberÃ­a retornar estructura correcta para GET /api/appointments", async () => {
+    it("debería retornar estructura correcta para GET /api/appointments", async () => {
       const response = await request(app)
         .get("/api/appointments")
         .set("Authorization", validToken)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveProperty("appointments");
+      expect(Array.isArray(response.body.appointments)).toBe(true);
     });
 
-    it("deberÃ­a retornar 404 para cita inexistente", async () => {
+    it("debería retornar 404 para cita inexistente", async () => {
       const response = await request(app)
         .get("/api/appointments/99999")
         .set("Authorization", validToken)
         .expect(404);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
   });
 
   describe("Slots Disponibles", () => {
-    it("deberÃ­a retornar slots para una fecha vÃ¡lida", async () => {
+    it("debería retornar slots para una fecha válida", async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       const dateStr = futureDate.toISOString().split("T")[0];
@@ -102,23 +109,25 @@ describe("Appointments Integration Tests", () => {
         .set("Authorization", validToken)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
+
+      expect(response.body).toHaveProperty("slots");
+      expect(Array.isArray(response.body.slots)).toBe(true);
     });
 
-    it("deberÃ­a manejar fecha invÃ¡lida para slots", async () => {
+    it("debería manejar fecha inválida para slots", async () => {
       const response = await request(app)
         .get("/api/appointments/slots?date=invalid-date")
         .set("Authorization", validToken);
 
-      // Puede ser 400 o 200 dependiendo de la implementaciÃ³n
+      // Puede ser 400 o 200 dependiendo de la implementación
       expect([200, 400]).toContain(response.status);
     });
   });
 
-  describe("Flujo E2E Completo - DocumentaciÃ³n", () => {
-    it("documenta el flujo de creaciÃ³n de cita con validaciÃ³n", async () => {
-      // Este test documenta el flujo E2E que deberÃ­a funcionar
-      // En producciÃ³n: valida fecha futura â†’ valida disponibilidad â†’ valida mascota/cliente â†’ crea cita
+  describe("Flujo E2E Completo - Documentación", () => {
+    it("documenta el flujo de creación de cita con validación", async () => {
+      // Este test documenta el flujo E2E que debería funcionar
+      // En producción: valida fecha futura ? valida disponibilidad ? valida mascota/cliente ? crea cita
 
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
@@ -127,7 +136,7 @@ describe("Appointments Integration Tests", () => {
         date: futureDate.toISOString(),
         clientId: 1,
         petId: 1,
-        notes: "RevisiÃ³n anual",
+        notes: "Revisión anual",
         duration: 30,
       };
 
@@ -136,33 +145,35 @@ describe("Appointments Integration Tests", () => {
         .set("Authorization", validToken)
         .send(appointmentData);
 
-      // Verificar que la respuesta es vÃ¡lida (201 para Ã©xito, 404/409 si hay conflictos)
+
+      // Verificar que la respuesta es válida (201 para éxito, 404/409 si hay conflictos)
       expect([201, 400, 404, 409]).toContain(response.status);
     });
 
-    it("documenta el flujo de actualizaciÃ³n de estado", async () => {
+    it("documenta el flujo de actualización de estado", async () => {
       const response = await request(app)
         .put("/api/appointments/1/status")
         .set("Authorization", validToken)
         .send({ status: "confirmed" });
 
-      // Puede ser 200 (Ã©xito), 404 (no existe), 400 (estado invÃ¡lido)
+      // Puede ser 200 (éxito), 404 (no existe), 400 (estado inválido)
       expect([200, 400, 404]).toContain(response.status);
     });
   });
 
-  describe("GestiÃ³n de Estados", () => {
-    it("deberÃ­a rechitar estado invÃ¡lido", async () => {
+  describe("Gestión de Estados", () => {
+    it("debería rechitar estado inválido", async () => {
       const response = await request(app)
         .put("/api/appointments/1/status")
         .set("Authorization", validToken)
         .send({ status: "estado-invalido" })
         .expect(400);
 
-      expect(response.body).toHaveProperty("error");
+      expect(response.body).toHaveProperty("code");
+      expect(response.body).toHaveProperty("message");
     });
 
-    it("deberÃ­a aceptar estados vÃ¡lidos", async () => {
+    it("debería aceptar estados válidos", async () => {
       const validStatuses = ["pending", "confirmed", "completed", "cancelled"];
 
       for (const status of validStatuses) {
@@ -178,7 +189,7 @@ describe("Appointments Integration Tests", () => {
   });
 
   describe("Casos de Borde", () => {
-    it("deberÃ­a manejar duraciÃ³n negativa como error", async () => {
+    it("debería manejar duración negativa como error", async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
 
@@ -195,7 +206,7 @@ describe("Appointments Integration Tests", () => {
       expect([400, 404]).toContain(response.status);
     });
 
-    it("deberÃ­a manejar clienteId inexistente", async () => {
+    it("debería manejar clienteId inexistente", async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
 
@@ -211,7 +222,7 @@ describe("Appointments Integration Tests", () => {
       expect([404, 400]).toContain(response.status);
     });
 
-    it("deberÃ­a manejar petId inexistente", async () => {
+    it("debería manejar petId inexistente", async () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
 
@@ -235,7 +246,8 @@ describe("Appointments Integration Tests", () => {
         .set("Authorization", validToken)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveProperty("appointments");
+      expect(Array.isArray(response.body.appointments)).toBe(true);
     });
 
     it("todos los roles autenticados pueden ver slots", async () => {
@@ -247,7 +259,8 @@ describe("Appointments Integration Tests", () => {
         .set("Authorization", validToken)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveProperty("slots");
+      expect(Array.isArray(response.body.slots)).toBe(true);
     });
   });
 });

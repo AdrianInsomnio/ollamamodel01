@@ -13,7 +13,11 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
-app.use(cors());
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === "production" ? "https://yourdomain.com" : "http://localhost:3000"),
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(httpLogger);
 
