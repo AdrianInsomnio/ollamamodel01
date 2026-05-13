@@ -104,11 +104,65 @@ const remove = async (id, organizationId) => {
   return await repository.remove(id, organizationId);
 };
 
+const search = async (query, organizationId) => {
+  if (!query || query.trim() === '') {
+    throw new AppError('Search query is required', 400);
+  }
+  return await repository.search(query.trim(), organizationId);
+};
+
+const createWithPet = async (data, organizationId) => {
+  // Validar campos requeridos del cliente
+  if (!data.name || data.name.trim() === '') {
+    throw new AppError('Client name is required', 400);
+  }
+
+  // Validar teléfono si se proporciona
+  if (data.phone && !isValidPhone(data.phone)) {
+    throw new AppError('Invalid phone format', 400);
+  }
+
+  // Validar email si se proporciona
+  if (data.email && !isValidEmail(data.email)) {
+    throw new AppError('Invalid email format', 400);
+  }
+
+  // Validar campos requeridos de la mascota
+  if (!data.pet || !data.pet.name || data.pet.name.trim() === '') {
+    throw new AppError('Pet name is required', 400);
+  }
+
+  if (!data.pet.species || data.pet.species.trim() === '') {
+    throw new AppError('Pet species is required', 400);
+  }
+
+  // Validar email único
+  if (data.email) {
+    const existingEmail = await repository.findByEmail(data.email, organizationId);
+    if (existingEmail) {
+      throw new AppError('Email already in use', 400);
+    }
+  }
+
+  // Validar documentId único
+  if (data.documentId) {
+    const existingDoc = await repository.findByDocumentId(data.documentId, organizationId);
+    if (existingDoc) {
+      throw new AppError('Document ID already in use', 400);
+    }
+  }
+
+  const { pet, ...clientData } = data;
+  return await repository.createWithPet(clientData, pet, organizationId);
+};
+
 module.exports = {
   create,
   getAll,
   getById,
   getClientHistory,
   update,
-  remove
+  remove,
+  search,
+  createWithPet
 };

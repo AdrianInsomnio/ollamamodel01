@@ -141,13 +141,30 @@ const remove = async (id, organizationId) => {
   if (consultation.diagnoses.length > 0) {
     throw new Error('Cannot delete consultation with diagnoses');
   }
-  
+
   // Eliminar relaciones primero
   await prisma.treatment.deleteMany({ where: { consultationId: id } });
   await prisma.prescription.deleteMany({ where: { consultationId: id } });
-  
+
   return await prisma.consultation.delete({
     where: { id }
+  });
+};
+
+const updateStatus = async (id, status, closedAt = null) => {
+  return await prisma.consultation.update({
+    where: { id },
+    data: {
+      status,
+      ...(closedAt && { closedAt })
+    },
+    include: {
+      pet: true,
+      client: true,
+      diagnoses: true,
+      treatments: true,
+      prescriptions: true
+    }
   });
 };
 
@@ -164,5 +181,6 @@ module.exports = {
   removeTreatment,
   removePrescription,
   update,
-  remove
+  remove,
+  updateStatus
 };

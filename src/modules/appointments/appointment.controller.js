@@ -3,7 +3,7 @@ const service = require('./appointment.service');
 const create = async (req, res, next) => {
   try {
     const item = await service.create(req.body, req.user.organizationId);
-    res.status(201).json(item);
+    res.status(201).json({ appointment: item });
   } catch (error) {
     next(error);
   }

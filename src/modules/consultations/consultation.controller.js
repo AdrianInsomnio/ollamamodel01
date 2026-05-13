@@ -81,6 +81,15 @@ const update = async (req, res, next) => {
   }
 };
 
+const close = async (req, res, next) => {
+  try {
+    const result = await service.close(parseInt(req.params.id), req.user.organizationId, req.body);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getAll,
@@ -90,5 +99,6 @@ module.exports = {
   update,
   addDiagnosis,
   addTreatment,
-  addPrescription
+  addPrescription,
+  close
 };

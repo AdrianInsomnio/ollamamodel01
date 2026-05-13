@@ -19,6 +19,7 @@ async function main() {
       username: 'admin',
       email: 'admin@veterinarian.com',
       password: hashedPassword,
+      role: 'ADMIN',
       organizationId: org.id
     }
   });

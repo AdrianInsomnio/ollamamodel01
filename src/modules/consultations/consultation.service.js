@@ -2,6 +2,7 @@ const repository = require('./consultation.repository');
 const petRepository = require('../pets/pet.repository');
 const clientRepository = require('../clients/client.repository');
 const appointmentRepository = require('../appointments/appointment.repository');
+const saleService = require('../sales/sale.service');
 const { AppError } = require('../../core/errors/AppError');
 
 // Validar datos médicos básicos
@@ -158,6 +159,80 @@ const remove = async (id, organizationId) => {
   return await repository.remove(id, organizationId);
 };
 
+const close = async (id, organizationId, closeData) => {
+  const { items, paymentMethod, discount = 0 } = closeData;
+
+  // Validar que la consulta existe
+  const consultation = await getById(id, organizationId);
+
+  // Validar que la consulta está abierta
+  if (consultation.status !== 'OPEN') {
+    throw new AppError('Consultation is not open', 400);
+  }
+
+  // Validar items
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new AppError('Items are required', 400);
+  }
+
+  // Validar método de pago
+  if (!paymentMethod) {
+    throw new AppError('Payment method is required', 400);
+  }
+
+  // Crear la venta usando saleService
+  const saleData = {
+    clientId: consultation.clientId,
+    petId: consultation.petId,
+    consultationId: id,
+    items,
+    discount,
+    paymentMethod
+  };
+
+  const sale = await saleService.createSale(saleData, organizationId);
+
+  // Cerrar la consulta
+  const closedConsultation = await repository.updateStatus(id, 'CLOSED', new Date());
+
+  // Preparar datos para impresión (ticket 80mm)
+  const printData = {
+    type: 'thermal_80mm',
+    client: {
+      name: consultation.client.name,
+      documentId: consultation.client.documentId,
+      phone: consultation.client.phone
+    },
+    pet: {
+      name: consultation.pet.name,
+      species: consultation.pet.species,
+      breed: consultation.pet.breed
+    },
+    consultation: {
+      id: consultation.id,
+      date: consultation.createdAt
+    },
+    items: sale.items.map(item => ({
+      name: item.nameSnapshot,
+      quantity: item.quantity,
+      price: item.priceSnapshot,
+      subtotal: item.subtotal
+    })),
+    subtotal: sale.subtotal,
+    discount: sale.discount,
+    tax: sale.tax,
+    total: sale.total,
+    paymentMethod: sale.paymentMethod,
+    saleId: sale.id
+  };
+
+  return {
+    consultation: closedConsultation,
+    sale,
+    printData
+  };
+};
+
 module.exports = {
   create,
   getAll,
@@ -171,5 +246,6 @@ module.exports = {
   removeTreatment,
   removePrescription,
   update,
-  remove
+  remove,
+  close
 };
