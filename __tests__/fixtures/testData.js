@@ -1,4 +1,5 @@
 const { faker } = require('@faker-js/faker');
+const { ROLES } = require('../../src/core/constants/roles');
 
 // Datos de prueba para organizaciones
 const createTestOrganization = (overrides = {}) => ({
@@ -14,6 +15,7 @@ const createTestUser = (organizationId, overrides = {}) => ({
   username: faker.internet.userName(),
   email: faker.internet.email(),
   password: faker.internet.password(),
+  role: ROLES.USER,
   organizationId,
   createdAt: faker.date.past(),
   updatedAt: faker.date.recent(),

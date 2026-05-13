@@ -1,4 +1,5 @@
 const { verifyToken } = require('../utils/jwt.util');
+const { ROLES } = require('../constants/roles');
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -17,7 +18,7 @@ const authMiddleware = (req, res, next) => {
       username: decoded.username,
       email: decoded.email,
       organizationId: decoded.organizationId,
-      role: decoded.role || 'user' // Default role if not specified
+      role: decoded.role || ROLES.USER
     };
     next();
   } catch (error) {
@@ -45,7 +46,7 @@ const optionalAuthMiddleware = (req, res, next) => {
       username: decoded.username,
       email: decoded.email,
       organizationId: decoded.organizationId,
-      role: decoded.role || 'user'
+      role: decoded.role || ROLES.USER
     };
   } catch (error) {
     // Invalid token is ignored for optional auth

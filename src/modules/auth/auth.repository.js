@@ -1,9 +1,10 @@
 const { prisma } = require('../../lib/prisma');
+const { ROLES } = require('../../core/constants/roles');
 
 const findUserByEmail = async (email, organizationId) => {
   return await prisma.user.findFirst({
     where: { email, organizationId },
-    select: { id: true, username: true, email: true, password: true, organizationId: true }
+    select: { id: true, username: true, email: true, password: true, organizationId: true, role: true }
   });
 };
 
@@ -23,13 +24,14 @@ const findUserByEmailOrUsername = async (email, username, organizationId) => {
   });
 };
 
-const createUser = async (username, email, hashedPassword, organizationId) => {
+const createUser = async (username, email, hashedPassword, organizationId, role = ROLES.ADMIN) => {
   return await prisma.user.create({
     data: {
       username,
       email,
       password: hashedPassword,
-      organizationId
+      organizationId,
+      role
     }
   });
 };

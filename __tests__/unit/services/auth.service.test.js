@@ -33,6 +33,7 @@ jest.mock('../../../src/core/errors/AppError', () => ({
 
 const authService = require('../../../src/modules/auth/auth.service');
 const { createTestOrganization, createTestUser } = require('../../fixtures/testData');
+const { ROLES } = require('../../../src/core/constants/roles');
 
 // Importar el mock de AppError para las verificaciones
 const mockAppError = require('../../../src/core/errors/AppError');
@@ -56,6 +57,7 @@ describe('Auth Service', () => {
       const mockUser = createTestUser(mockOrganization.id, {
         username: validUserData.username,
         email: validUserData.email,
+        role: ROLES.ADMIN,
       });
       const mockToken = 'mock.jwt.token';
 
@@ -90,13 +92,14 @@ describe('Auth Service', () => {
         username: mockUser.username,
         email: mockUser.email,
         organizationId: mockOrganization.id,
-        role: 'admin'
+        role: ROLES.ADMIN
       });
       expect(result).toEqual({
         user: {
           id: mockUser.id,
           username: mockUser.username,
           email: mockUser.email,
+          role: ROLES.ADMIN,
           organizationId: mockOrganization.id
         },
         token: mockToken,

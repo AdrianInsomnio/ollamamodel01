@@ -8,14 +8,14 @@ const { AppError } = require('../errors/AppError');
  * @returns {Function} Middleware de Express
  *
  * @example
- * // Solo admin puede eliminar usuarios
- * router.delete('/:id', authMiddleware, authorize('admin'), userController.remove);
+ * // Solo ADMIN puede eliminar usuarios
+ * router.delete('/:id', authMiddleware, authorize('ADMIN'), userController.remove);
  *
- * // Admin y vet pueden crear consultas
- * router.post('/', authMiddleware, authorize('admin', 'vet'), consultationController.create);
+ * // ADMIN y VET pueden crear consultas
+ * router.post('/', authMiddleware, authorize('ADMIN', 'VET'), consultationController.create);
  *
- * // Cualquier usuario autenticado (incluyendo assistant)
- * router.get('/', authMiddleware, authorize('admin', 'vet', 'assistant'), consultationController.getAll);
+ * // Cualquier rol operativo autenticado
+ * router.get('/', authMiddleware, authorize('ADMIN', 'VET', 'USER'), consultationController.getAll);
  */
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
@@ -52,7 +52,7 @@ const authorize = (...allowedRoles) => {
  * // Solo el dueño o admin puede ver/editar su propio perfil
  * router.get('/:id', authMiddleware, authorizeOwnerOrAdmin(
  *   (req) => parseInt(req.params.id),
- *   'admin'
+ *   'ADMIN'
  * ), userController.getById);
  */
 const authorizeOwnerOrAdmin = (getResourceOwnerId, ...adminRoles) => {
