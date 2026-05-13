@@ -91,7 +91,7 @@ const checkAvailability = async (date, duration, organizationId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.appointment.update({
-    where: { id },
+    where: { id, organizationId },
     data,
     include: {
       client: true,
@@ -103,7 +103,7 @@ const update = async (id, organizationId, data) => {
 
 const remove = async (id, organizationId) => {
   return await prisma.appointment.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
@@ -117,3 +117,5 @@ module.exports = {
   update,
   remove
 };
+
+

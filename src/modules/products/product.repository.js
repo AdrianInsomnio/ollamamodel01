@@ -58,7 +58,7 @@ const findByIds = async (ids, organizationId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.product.update({
-    where: { id },
+    where: { id, organizationId },
     data,
     include: {
       category: true
@@ -68,13 +68,13 @@ const update = async (id, organizationId, data) => {
 
 const remove = async (id, organizationId) => {
   return await prisma.product.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
 const updateStock = async (id, quantityChange, organizationId) => {
   return await prisma.product.update({
-    where: { id },
+    where: { id, organizationId },
     data: {
       stock: {
         increment: quantityChange
@@ -137,3 +137,4 @@ module.exports = {
   createStockMovement,
   getProductsByCategory
 };
+

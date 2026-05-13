@@ -115,7 +115,7 @@ const getClientHistory = async (id, organizationId) => {
 
 const update = async (id, organizationId, data) => {
   return await prisma.client.update({
-    where: { id },
+    where: { id, organizationId },
     data,
     include: {
       pets: true
@@ -125,7 +125,7 @@ const update = async (id, organizationId, data) => {
 
 const remove = async (id, organizationId) => {
   return await prisma.client.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
@@ -141,3 +141,4 @@ module.exports = {
   update,
   remove
 };
+

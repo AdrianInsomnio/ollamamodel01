@@ -32,8 +32,9 @@ const findByConsultationId = async (consultationId, organizationId) => {
 
 const remove = async (id, organizationId) => {
   return await prisma.diagnosis.delete({
-    where: { id }
+    where: { id, organizationId }
   });
 };
 
 module.exports = { create, findByConsultationId, remove };
+
