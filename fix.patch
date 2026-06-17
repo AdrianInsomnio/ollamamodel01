@@ -1,0 +1,14 @@
+﻿diff --git a/src/modules/consultations/consultation.repository.js b/src/modules/consultations/consultation.repository.js
+--- a/src/modules/consultations/consultation.repository.js
++++ b/src/modules/consultations/consultation.repository.js
+@@ -13,8 +13,7 @@ const create = async (data, organizationId) => {
+       client: true,
+       appointment: true,
+       diagnoses: true,
+       treatments: true,
+-      prescriptions: true,
+-      status: "OPEN"
++      prescriptions: true
+     }
+   });
+ };
