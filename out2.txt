@@ -1,0 +1,7 @@
+◇ injected env (16) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Database created or already exists
+MySQL connected successfully
+Database tables initialized successfully
+Prisma connected successfully
+Server running on port 5000

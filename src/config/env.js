@@ -18,6 +18,12 @@ const schema = Joi.object({
 
   DATABASE_URL: Joi.string().uri().required(),
 
+  // Flags de cookies HttpOnly (Fase D1)
+  AUTH_VIA_COOKIE: Joi.boolean().default(false),
+  AUTH_COOKIE_NAME: Joi.string().default('access_token'),
+  AUTH_COOKIE_SAME_SITE: Joi.string().valid('lax', 'strict', 'none').default('lax'),
+  AUTH_COOKIE_MAX_AGE_MS: Joi.number().default(86400000),
+
   LOG_LEVEL: Joi.string()
     .valid('info', 'warn', 'error', 'debug')
     .required(),
@@ -38,4 +44,8 @@ module.exports.env = {
   jwtExpiresIn: value.JWT_EXPIRES_IN,
   idempotencyTtl: value.IDEMPOTENCY_TTL_MINUTES,
   logLevel: value.LOG_LEVEL,
+  authViaCookie: value.AUTH_VIA_COOKIE,
+  authCookieName: value.AUTH_COOKIE_NAME,
+  authCookieSameSite: value.AUTH_COOKIE_SAME_SITE,
+  authCookieMaxAgeMs: value.AUTH_COOKIE_MAX_AGE_MS,
 };

@@ -8,7 +8,7 @@ datasource db {
 }
 
 //////////////////////
-// ORGANIZATIONS //
+// 🏢 ORGANIZATIONS //
 //////////////////////
 
 model Organization {
@@ -22,7 +22,6 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-clinics       Clinic[]
   users         User[]
   refreshTokens RefreshToken[]
   clients       Client[]
@@ -32,38 +31,10 @@ clinics       Clinic[]
   consultations Consultation[]
   products      Product[]
   services      Service[]
-  plans         Plan[]
-  subscriptions Subscription[]
 }
 
-
-
 //////////////////////
-//  CLINICS //
-//////////////////////
-
-model Clinic {
-  id            Int      @id @default(autoincrement())
-  name          String
-  rut           String?  @unique
-  website       String?
-  imageUrl      String? 
-  imagePublicId  String?
-  imageVersion   String?
-  address       String?
-  phone         String?
-  email         String?
-  isDefault     Boolean  @default(false)
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  organizationId Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@map("clinics")
-}
-
-
-//////////////////////
-// USERS & AUTH  //
+// 👤 USERS & AUTH  //
 //////////////////////
 
 model User {
@@ -100,7 +71,7 @@ model RefreshToken {
 }
 
 //////////////////////
-//  CLIENTS       //
+// 👥 CLIENTS       //
 //////////////////////
 
 model Client {
@@ -108,7 +79,7 @@ model Client {
   name           String
   documentId     String?   @unique // CI, RUT, etc.
   phone          String?
-  phone2         String? // telÃƒÂ©fono secundario
+  phone2         String? // teléfono secundario
   email          String?
   address        String?
   birthDate      DateTime?
@@ -127,7 +98,7 @@ model Client {
 }
 
 //////////////////////
-//  PETS          //
+// 🐾 PETS          //
 //////////////////////
 
 model Pet {
@@ -154,15 +125,15 @@ model Pet {
 }
 
 //////////////////////
-//  APPOINTMENTS  //
+// 📅 APPOINTMENTS  //
 //////////////////////
 
 model Appointment {
   id             Int      @id @default(autoincrement())
   date           DateTime
-  duration       Int      @default(30) // duraciÃƒÂ³n en minutos
+  duration       Int      @default(30) // duración en minutos
   status         String   @default("pending") // pending, confirmed, completed, cancelled
-  serviceType    String? // consulta, grooming, vacunaciÃƒÂ³n, etc.
+  serviceType    String? // consulta, grooming, vacunación, etc.
   notes          String?
   clientId       Int
   petId          Int
@@ -177,7 +148,7 @@ model Appointment {
 }
 
 //////////////////////
-//  CLINICAL      //
+// 🏥 CLINICAL      //
 //////////////////////
 
 model Consultation {
@@ -187,11 +158,11 @@ model Consultation {
   appointmentId  Int? @unique
   organizationId Int
 
-  // Datos clÃƒÂ­nicos
+  // Datos clínicos
   weight      Float? // peso en kg
-  temperature Float? // temperatura en Ã‚Â°C
-  symptoms    String? // sÃƒÂ­ntomas presentados
-  diagnosis   String? // diagnÃƒÂ³stico principal
+  temperature Float? // temperatura en °C
+  symptoms    String? // síntomas presentados
+  diagnosis   String? // diagnóstico principal
   treatment   String? // tratamiento aplicado
   notes       String? // notas adicionales
 
@@ -244,21 +215,21 @@ model Prescription {
 }
 
 //////////////////////
-//  CATALOG       //
+// 📦 CATALOG       //
 //////////////////////
 
 model Product {
   id             Int      @id @default(autoincrement())
   name           String
   description    String?
-  sku            String?  @unique // cÃƒÂ³digo ÃƒÂºnico de producto
+  sku            String?  @unique // código único de producto
   categoryId     Int?     @map("category_id")
   price          Float
   cost           Float? // costo de compra
   stock          Int      @default(0)
-  minStock       Int      @default(5) // stock mÃƒÂ­nimo para alertas
+  minStock       Int      @default(5) // stock mínimo para alertas
   isActive       Boolean  @default(true)
-  discontinuedAt DateTime? // fecha de discontinuaciÃƒÂ³n
+  discontinuedAt DateTime? // fecha de discontinuación
   organizationId Int
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -289,8 +260,8 @@ model Service {
   name           String
   description    String?
   price          Float
-  duration       Int? // duraciÃƒÂ³n estimada en minutos
-  category       String? // consulta, grooming, vacunaciÃƒÂ³n, etc.
+  duration       Int? // duración estimada en minutos
+  category       String? // consulta, grooming, vacunación, etc.
   isActive       Boolean  @default(true)
   organizationId Int
   createdAt      DateTime @default(now())
@@ -302,7 +273,7 @@ model Service {
 }
 
 //////////////////////
-//  SALES         //
+// 💰 SALES         //
 //////////////////////
 
 model Sale {
@@ -318,7 +289,7 @@ model Sale {
   tax      Float @default(0) // IVA (14% en Uruguay)
   total    Float @default(0) // total final
 
-  // Estado y mÃƒÂ©todo de pago
+  // Estado y método de pago
   status        String  @default("completed") // pending, completed, cancelled
   paymentMethod String? // cash, card, transfer, etc.
 
@@ -348,7 +319,7 @@ model SaleItem {
 }
 
 //////////////////////
-//  INVENTORY     //
+// 📦 INVENTORY     //
 //////////////////////
 
 model StockMovement {
@@ -367,7 +338,7 @@ model StockMovement {
 
 
 //////////////////////
-// Ã°Å¸â€œÅ½ ATTACHMENTS   //
+// 📎 ATTACHMENTS   //
 //////////////////////
 
 model Attachment {
@@ -379,7 +350,7 @@ model Attachment {
 }
 
 //////////////////////
-// IDEMPOTENCY   //
+// 🔐 IDEMPOTENCY   //
 //////////////////////
 
 model IdempotencyKey {
@@ -394,7 +365,7 @@ model IdempotencyKey {
 }
 
 //////////////////////
-//  FISCAL DOCUMENTS //
+// 🧾 FISCAL DOCUMENTS //
 //////////////////////
 
 enum PaymentMethod {
@@ -477,40 +448,3 @@ model Payment {
 
   createdAt DateTime @default(now())
 }
-
-// SUPER ADMIN MODELS
-model Plan {
-  id            Int      @id @default(autoincrement())
-  name          String
-  description   String?
-  price         Float
-  interval      String
-  features      Json
-  isActive      Boolean  @default(true)
-  organizationId Int
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  subscriptions Subscription[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@map("plans")
-}
-
-
-model Subscription {
-  id            Int      @id @default(autoincrement())
-  planId        Int
-  plan          Plan     @relation(fields: [planId], references: [id])
-  organizationId Int
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  startDate     DateTime
-  endDate       DateTime?
-  isActive      Boolean  @default(true)
-  paymentMethod String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("subscriptions")
-}
-
-
-

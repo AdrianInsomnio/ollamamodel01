@@ -2,7 +2,8 @@ const service = require('./sale.service');
 
 const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body, req.user.organizationId);
+    // createSale aplica todas las validaciones (cliente, stock, IVA, transaccion).
+    const item = await service.createSale(req.body, req.user.organizationId);
     res.status(201).json(item);
   } catch (error) {
     next(error);

@@ -1,7 +1,7 @@
 const { AppError } = require('../errors/AppError');
 
 /**
- * Middleware de autorizaciÃ³n por roles
+ * Middleware de autorización por roles
  * Verifica que el usuario tenga uno de los roles permitidos
  *
  * @param {...string} allowedRoles - Roles permitidos para acceder al recurso
@@ -19,37 +19,43 @@ const { AppError } = require('../errors/AppError');
  */
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
-    // Verificar que el usuario estÃ© autenticado (debe ser ejecutado despuÃ©s de authMiddleware)
+    // Verificar que el usuario esté autenticado (debe ser ejecutado después de authMiddleware)
     if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
     }
 
     const { role } = req.user;
 
-    // Verificar si el rol del usuario estÃ¡ en los roles permitidos
+    // Verificar si el rol del usuario está en los roles permitidos
     if (!allowedRoles.includes(role)) {
       return res.status(403).json({
-        error: 'Access denied',
-        message: `This resource requires one of the following roles: ${allowedRoles.join(', ')}`,
-        currentRole: role
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        details: {
+          requiredRoles: allowedRoles,
+          currentRole: role
+        }
       });
     }
 
-    // El rol estÃ¡ permitido, continuar
+    // El rol está permitido, continuar
     next();
   };
 };
 
 /**
- * Middleware de autorizaciÃ³n por propiedad de recurso
+ * Middleware de autorización por propiedad de recurso
  * Verifica que el usuario sea el propietario del recurso o tenga un rol administrativo
  *
- * @param {Function} getResourceOwnerId - FunciÃ³n que extrae el ownerId del recurso (req) => ownerId
+ * @param {Function} getResourceOwnerId - Función que extrae el ownerId del recurso (req) => ownerId
  * @param {...string} adminRoles - Roles que pueden acceder sin ser propietarios
  * @returns {Function} Middleware de Express
  *
  * @example
- * // Solo el dueÃ±o o admin puede ver/editar su propio perfil
+ * // Solo el dueño o admin puede ver/editar su propio perfil
  * router.get('/:id', authMiddleware, authorizeOwnerOrAdmin(
  *   (req) => parseInt(req.params.id),
  *   'ADMIN'
@@ -58,7 +64,10 @@ const authorize = (...allowedRoles) => {
 const authorizeOwnerOrAdmin = (getResourceOwnerId, ...adminRoles) => {
   return async (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
     }
 
     const { id: userId, role } = req.user;
@@ -76,22 +85,28 @@ const authorizeOwnerOrAdmin = (getResourceOwnerId, ...adminRoles) => {
 
     // No es propietario ni admin, denegar acceso
     return res.status(403).json({
-      error: 'Access denied',
-      message: 'You can only access your own resources'
+      code: 'FORBIDDEN',
+      message: 'Access denied',
+      details: {
+        reason: 'You can only access your own resources'
+      }
     });
   };
 };
 
 /**
- * Middleware de autorizaciÃ³n por organizaciÃ³n
- * Verifica que el usuario pertenezca a la organizaciÃ³n solicitada
+ * Middleware de autorización por organización
+ * Verifica que el usuario pertenezca a la organización solicitada
  *
  * @returns {Function} Middleware de Express
  */
 const authorizeOrganization = () => {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
     }
 
     const { organizationId } = req.user;
@@ -104,11 +119,14 @@ const authorizeOrganization = () => {
       return next();
     }
 
-    // Verificar que el usuario pertenezca a la organizaciÃ³n solicitada
+    // Verificar que el usuario pertenezca a la organización solicitada
     if (organizationId !== requestedOrgId) {
       return res.status(403).json({
-        error: 'Access denied',
-        message: 'You do not have access to this organization'
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        details: {
+          reason: 'You do not have access to this organization'
+        }
       });
     }
 

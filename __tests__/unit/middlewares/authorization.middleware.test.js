@@ -21,7 +21,7 @@ describe('Authorization Middleware', () => {
   });
 
   describe('authorize', () => {
-    it('deberÃ­a permitir acceso si el rol estÃ¡ autorizado', () => {
+    it('debería permitir acceso si el rol está autorizado', () => {
       // Arrange
       req.user = { id: 1, role: ROLES.ADMIN };
       const middleware = authorize(ROLES.ADMIN, ROLES.VET);
@@ -34,7 +34,7 @@ describe('Authorization Middleware', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('deberÃ­a permitir acceso si el rol es uno de los permitidos', () => {
+    it('debería permitir acceso si el rol es uno de los permitidos', () => {
       // Arrange
       req.user = { id: 1, role: ROLES.VET };
       const middleware = authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER);
@@ -46,7 +46,7 @@ describe('Authorization Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
-    it('deberÃ­a denegar acceso si el rol no estÃ¡ autorizado', () => {
+    it('debería denegar acceso si el rol no está autorizado', () => {
       // Arrange
       req.user = { id: 1, role: ROLES.USER };
       const middleware = authorize(ROLES.ADMIN);
@@ -57,14 +57,17 @@ describe('Authorization Middleware', () => {
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
-        error: 'Access denied',
-        message: 'This resource requires one of the following roles: ADMIN',
-        currentRole: ROLES.USER
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        details: {
+          requiredRoles: [ROLES.ADMIN],
+          currentRole: ROLES.USER
+        }
       });
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('deberÃ­a retornar 401 si no hay usuario autenticado', () => {
+    it('debería retornar 401 si no hay usuario autenticado', () => {
       // Arrange
       req.user = null;
       const middleware = authorize(ROLES.ADMIN);
@@ -74,11 +77,14 @@ describe('Authorization Middleware', () => {
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Authentication required' });
+      expect(res.json).toHaveBeenCalledWith({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('deberÃ­a funcionar con mÃºltiples roles permitidos', () => {
+    it('debería funcionar con múltiples roles permitidos', () => {
       // Arrange
       req.user = { id: 1, role: ROLES.VET };
       const middleware = authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER);
@@ -92,11 +98,12 @@ describe('Authorization Middleware', () => {
   });
 
   describe('authorizeOwnerOrAdmin', () => {
-    it('deberÃ­a permitir acceso si es el propietario del recurso', async () => {
+    it('debería permitir acceso si es el propietario del recurso', async () => {
       // Arrange
       req.user = { id: 1, role: ROLES.USER };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
       const middleware = authorizeOwnerOrAdmin(getResourceOwnerId, ROLES.ADMIN);
+
 
       // Act
       await middleware(req, res, next);
@@ -106,7 +113,8 @@ describe('Authorization Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
-    it('deberÃ­a permitir acceso si tiene rol administrativo', async () => {
+
+    it('debería permitir acceso si tiene rol administrativo', async () => {
       // Arrange
       req.user = { id: 2, role: ROLES.ADMIN };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
@@ -119,7 +127,7 @@ describe('Authorization Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
-    it('deberÃ­a denegar acceso si no es propietario ni admin', async () => {
+    it('debería denegar acceso si no es propietario ni admin', async () => {
       // Arrange
       req.user = { id: 3, role: ROLES.USER };
       const getResourceOwnerId = jest.fn().mockResolvedValue(1);
@@ -131,13 +139,16 @@ describe('Authorization Middleware', () => {
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
-        error: 'Access denied',
-        message: 'You can only access your own resources'
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        details: {
+          reason: 'You can only access your own resources'
+        }
       });
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('deberÃ­a retornar 401 si no hay usuario autenticado', async () => {
+    it('debería retornar 401 si no hay usuario autenticado', async () => {
       // Arrange
       req.user = null;
       const middleware = authorizeOwnerOrAdmin(() => 1, ROLES.ADMIN);
@@ -147,12 +158,16 @@ describe('Authorization Middleware', () => {
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
       expect(next).not.toHaveBeenCalled();
     });
   });
 
   describe('authorizeOrganization', () => {
-    it('deberÃ­a permitir acceso si la organizaciÃ³n coincide', () => {
+    it('debería permitir acceso si la organización coincide', () => {
       // Arrange
       req.user = { id: 1, organizationId: 1 };
       req.params.organizationId = '1';
@@ -161,11 +176,13 @@ describe('Authorization Middleware', () => {
       // Act
       middleware(req, res, next);
 
+
       // Assert
       expect(next).toHaveBeenCalled();
     });
 
-    it('deberÃ­a permitir acceso si no hay organizationId en la request', () => {
+
+    it('debería permitir acceso si no hay organizationId en la request', () => {
       // Arrange
       req.user = { id: 1, organizationId: 1 };
       const middleware = authorizeOrganization();
@@ -177,7 +194,7 @@ describe('Authorization Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
-    it('deberÃ­a denegar acceso si la organizaciÃ³n no coincide', () => {
+    it('debería denegar acceso si la organización no coincide', () => {
       // Arrange
       req.user = { id: 1, organizationId: 1 };
       req.params.organizationId = '2';
@@ -189,13 +206,16 @@ describe('Authorization Middleware', () => {
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
-        error: 'Access denied',
-        message: 'You do not have access to this organization'
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        details: {
+          reason: 'You do not have access to this organization'
+        }
       });
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('deberÃ­a verificar organizationId en body', () => {
+    it('debería verificar organizationId en body', () => {
       // Arrange
       req.user = { id: 1, organizationId: 1 };
       req.body.organizationId = 2;
@@ -208,7 +228,7 @@ describe('Authorization Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(403);
     });
 
-    it('deberÃ­a verificar organizationId en query', () => {
+    it('debería verificar organizationId en query', () => {
       // Arrange
       req.user = { id: 1, organizationId: 1 };
       req.query.organizationId = '2';
@@ -221,7 +241,7 @@ describe('Authorization Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(403);
     });
 
-    it('deberÃ­a retornar 401 si no hay usuario autenticado', () => {
+    it('debería retornar 401 si no hay usuario autenticado', () => {
       // Arrange
       req.user = null;
       const middleware = authorizeOrganization();
@@ -231,6 +251,10 @@ describe('Authorization Middleware', () => {
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required'
+      });
       expect(next).not.toHaveBeenCalled();
     });
   });
