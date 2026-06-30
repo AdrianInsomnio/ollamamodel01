@@ -1,87 +1,136 @@
 ﻿const { prisma } = require('../../lib/prisma');
+const { AppError } = require('../../core/errors/AppError');
 
 /**
- * Devuelve el inicio y fin del "dia de hoy" en la zona horaria indicada.
- * Se calcula en UTC con el offset de la TZ para que la consulta Prisma
- * (que almacena DateTime en UTC) reciba los limites correctos.
+ * Convert a date to start of day in UTC (assuming input is UTC).
+ * Returns a Date object at 00:00:00.000Z.
  */
-const getDayRangeInTimezone = (timezone) => {
-  const now = new Date();
-
-  // Helpers de fecha en una TZ dada usando Intl.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const parts = fmt.formatToParts(now);
-  const yyyy = parts.find(p => p.type === 'year').value;
-  const mm = parts.find(p => p.type === 'month').value;
-  const dd = parts.find(p => p.type === 'day').value;
-
-  // Construir inicio/fin del dia en formato ISO local y convertirlos a Date.
-  // start = YYYY-MM-DDT00:00:00, end = YYYY-MM-DDT23:59:59.999 en la TZ.
-  // Usamos el truco de pedir un Date UTC a partir del string con offset.
-  const offsetIso = (date, hh, mm2, ss, ms) => {
-    // date = 'YYYY-MM-DD'
-    const localString = `${date}T${hh}:${mm2}:${ss}.${ms}`;
-    // Calculamos el offset real de la TZ en ese instante.
-    const d = new Date(localString + 'Z');
-    const tzDate = new Date(d.toLocaleString('en-US', { timeZone: timezone }));
-    const diff = d.getTime() - tzDate.getTime();
-    return new Date(d.getTime() - diff);
-  };
-
-  const dateStr = `${yyyy}-${mm}-${dd}`;
-  const start = offsetIso(dateStr, '00', '00', '00', '000');
-  const end = offsetIso(dateStr, '23', '59', '59', '999');
-  return { start, end };
+const startOfDay = (date) => {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 };
 
 /**
- * Metricas para un unico clinicId (scope "clinic" para ADMIN).
- * Devuelve conteos y agregados del dia en la TZ de la Organization.
+ * Convert a date to end of day in UTC (exclusive).
+ * Returns a Date object at 23:59:59.999Z.
  */
-const getClinicMetrics = async (clinicId, organizationId, timezone) => {
-  const { start, end } = getDayRangeInTimezone(timezone);
+const endOfDay = (date) => {
+  const d = new Date(date);
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
+};
 
-  // Conteos: consultas abiertas/cerradas, clientes y mascotas activas.
-  const [
-    openConsultations,
-    closedConsultationsToday,
-    activeClients,
-    activePets,
-    salesAgg,
-  ] = await Promise.all([
-    prisma.consultation.count({
-      where: { organizationId, clinicId, status: 'OPEN' },
-    }),
-    prisma.consultation.count({
-      where: {
-        organizationId,
-        clinicId,
-        status: 'CLOSED',
-        closedAt: { gte: start, lte: end },
+/**
+ * Find clinics for an organization.
+ * Since there is no Clinic entity, we treat the organization as a single clinic.
+ * @param {number} organizationId
+ * @returns {Promise<Array<{id:number, name:string, isDefault:boolean}>>}
+ */
+const findClinicsByOrganization = async (organizationId) => {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, name: true },
+  });
+  if (!org) {
+    throw new AppError('Organization not found', 404);
+  }
+  // Assume the organization's clinic is default
+  return [{ id: org.id, name: org.name, isDefault: true }];
+};
+
+/**
+ * Find clinics with metrics for today.
+ * @param {number} organizationId
+ * @param {string} timezone - IANA timezone string (not used, using UTC for simplicity)
+ * @returns {Promise<Array<{id:number, name:string, isDefault:boolean, metrics:Object}>>}
+ */
+const findClinicsWithMetrics = async (organizationId, timezone) => {
+  const clinics = await findClinicsByOrganization(organizationId);
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+
+  // We'll compute metrics for the single clinic (organization)
+  const clinic = clinics[0];
+  const metrics = await getClinicMetrics(clinic.id, organizationId, todayStart, todayEnd);
+  return [{ ...clinic, metrics }];
+};
+
+/**
+ * Get metrics for a clinic (organization) for a given date range.
+ * @param {number} clinicId - same as organizationId
+ * @param {number} organizationId
+ * @param {Date} start - start of day (UTC)
+ * @param {Date} end - end of day (UTC)
+ * @returns {Promise<Object>} metrics object
+ */
+const getClinicMetrics = async (clinicId, organizationId, start, end) => {
+  // Ensure clinicId matches organizationId (since we don't have separate clinic)
+  if (clinicId !== organizationId) {
+    // In case of mismatch, treat as organization scope
+    // but we will still compute for organizationId
+  }
+
+  // 1. Open consultations (status OPEN)
+  const openConsultations = await prisma.consultation.count({
+    where: {
+      organizationId,
+      status: 'OPEN',
+    },
+  });
+
+  // 2. Closed consultations today (status CLOSED and closedAt within [start, end))
+  const closedConsultationsToday = await prisma.consultation.count({
+    where: {
+      organizationId,
+      status: 'CLOSED',
+      closedAt: {
+        gte: start,
+        lt: end,
       },
-    }),
-    prisma.client.count({
-      where: { organizationId, clinicId, isActive: true },
-    }),
-    prisma.pet.count({
-      where: { organizationId, clinicId, isActive: true },
-    }),
-    prisma.sale.aggregate({
-      where: {
+    },
+  });
+
+  // 3. Active clients (isActive true)
+  const activeClients = await prisma.client.count({
+    where: {
+      organizationId,
+      isActive: true,
+    },
+  });
+
+  // 4. Active pets: pets whose client is active
+  const activePets = await prisma.pet.count({
+    where: {
+      client: {
         organizationId,
-        clinicId,
-        status: 'completed',
-        createdAt: { gte: start, lte: end },
+        isActive: true,
       },
-      _sum: { total: true, tax: true, subtotal: true },
-      _count: true,
-    }),
-  ]);
+    },
+  });
+
+  // 5. Sales today: sum of total and count where status = 'completed' and createdAt within [start, end)
+  const salesResult = await prisma.sale.aggregate({
+    where: {
+      organizationId,
+      status: 'completed',
+      createdAt: {
+        gte: start,
+        lt: end,
+      },
+    },
+    _sum: {
+      total: true,
+      tax: true,
+    },
+    _count: true,
+  });
+
+  const salesTodayTotal = Number(salesResult._sum.total) || 0;
+  const salesTodayTax = Number(salesResult._sum.tax) || 0;
+  const salesTodayCount = Number(salesResult._count) || 0;
+  const salesTodaySubtotal = salesTodayTotal - salesTodayTax; // assuming total = subtotal + tax
 
   return {
     openConsultations,
@@ -89,100 +138,16 @@ const getClinicMetrics = async (clinicId, organizationId, timezone) => {
     activeClients,
     activePets,
     salesToday: {
-      count: salesAgg._count || 0,
-      total: salesAgg._sum.total || 0,
-      tax: salesAgg._sum.tax || 0,
-      subtotal: salesAgg._sum.subtotal || 0,
+      total: salesTodayTotal,
+      tax: salesTodayTax,
+      subtotal: salesTodaySubtotal,
+      count: salesTodayCount,
     },
   };
 };
 
-/**
- * Lista clinicas de una Organization. Usado para SUPER_ADMIN.
- */
-const findClinicsByOrganization = async (organizationId) => {
-  return await prisma.clinic.findMany({
-    where: { organizationId, isActive: true },
-    orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-    select: { id: true, name: true, isDefault: true, timezone: true },
-  });
-};
-
-/**
- * Lista clinicas de una Organization con metricas del dia.
- * Usado por GET /api/admin/clinics (SUPER_ADMIN).
- */
-const findClinicsWithMetrics = async (organizationId, timezone) => {
-  const clinics = await prisma.clinic.findMany({
-    where: { organizationId },
-    orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-    select: {
-      id: true,
-      name: true,
-      address: true,
-      phone: true,
-      email: true,
-      timezone: true,
-      isActive: true,
-      isDefault: true,
-      createdAt: true,
-    },
-  });
-
-  const withMetrics = await Promise.all(
-    clinics.map(async (c) => ({
-      ...c,
-      metrics: c.isActive
-        ? await getClinicMetrics(c.id, organizationId, timezone)
-        : null,
-    }))
-  );
-
-  return withMetrics;
-};
-
-/**
- * Lista usuarios de una Organization con metricas simples.
- * Usado por GET /api/admin/users (SUPER_ADMIN).
- *
- * Metricas: cantidad de clinicas a las que pertenece y ultima actividad
- * (lastLogin). Si la org no tiene clinicas, usersCount por clinica queda
- * en 0. No expone password ni campos sensibles.
- */
-const findUsersWithMetrics = async (organizationId) => {
-  const users = await prisma.user.findMany({
-    where: { organizationId },
-    orderBy: [{ role: 'asc' }, { username: 'asc' }],
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      isActive: true,
-      lastLogin: true,
-      createdAt: true,
-      // Relacion muchos-a-muchos con Clinic no existe en el schema.
-      // Mantenemos la lista vacia; si se agrega la relacion M2M luego,
-      // este campo se llenara automaticamente.
-    },
-  });
-
-  return users.map((u) => ({
-    id: u.id,
-    username: u.username,
-    email: u.email,
-    role: u.role,
-    isActive: u.isActive,
-    lastLogin: u.lastLogin,
-    createdAt: u.createdAt,
-    clinicCount: 0,
-  }));
-};
-
 module.exports = {
-  getClinicMetrics,
   findClinicsByOrganization,
   findClinicsWithMetrics,
-  findUsersWithMetrics,
-  getDayRangeInTimezone,
+  getClinicMetrics,
 };

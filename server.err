@@ -1,0 +1,3 @@
+Error: User already exists
+    at Object.register (C:\Users\hhilo\OneDrive\Desktop\EntornoDev\ollmodel\src\modules\auth\auth.service.js:16:11)
+    at async register (C:\Users\hhilo\OneDrive\Desktop\EntornoDev\ollmodel\src\modules\auth\auth.controller.js:37:43)

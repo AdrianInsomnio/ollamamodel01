@@ -19,7 +19,7 @@ CREATE TABLE `users` (
     `username` VARCHAR(50) NOT NULL,
     `email` VARCHAR(100) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
-    `role` VARCHAR(191) NOT NULL DEFAULT 'user',
+    `role` VARCHAR(191) NOT NULL DEFAULT 'USER',
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `lastLogin` DATETIME(3) NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -118,6 +118,8 @@ CREATE TABLE `Consultation` (
     `consultationFee` DOUBLE NOT NULL DEFAULT 0,
     `treatmentFee` DOUBLE NOT NULL DEFAULT 0,
     `totalFee` DOUBLE NOT NULL DEFAULT 0,
+    `status` VARCHAR(191) NOT NULL DEFAULT 'OPEN',
+    `closedAt` DATETIME(3) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -157,16 +159,19 @@ CREATE TABLE `products` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(191) NOT NULL,
     `description` VARCHAR(191) NULL,
-    `category` VARCHAR(191) NULL,
+    `sku` VARCHAR(191) NULL,
+    `category_id` INTEGER NULL,
     `price` DOUBLE NOT NULL,
     `cost` DOUBLE NULL,
     `stock` INTEGER NOT NULL DEFAULT 0,
     `minStock` INTEGER NOT NULL DEFAULT 5,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `discontinuedAt` DATETIME(3) NULL,
     `organizationId` INTEGER NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
+    UNIQUE INDEX `products_sku_key`(`sku`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -176,7 +181,9 @@ CREATE TABLE `product_categories` (
     `name` VARCHAR(191) NOT NULL,
     `description` VARCHAR(191) NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `organizationId` INTEGER NOT NULL DEFAULT 1,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
 
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -320,6 +327,37 @@ CREATE TABLE `Payment` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `plans` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(191) NOT NULL,
+    `description` VARCHAR(191) NULL,
+    `price` DOUBLE NOT NULL,
+    `interval` VARCHAR(191) NOT NULL,
+    `features` JSON NOT NULL,
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `organizationId` INTEGER NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `subscriptions` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `planId` INTEGER NOT NULL,
+    `organizationId` INTEGER NOT NULL,
+    `startDate` DATETIME(3) NOT NULL,
+    `endDate` DATETIME(3) NULL,
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `paymentMethod` VARCHAR(191) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- AddForeignKey
 ALTER TABLE `users` ADD CONSTRAINT `users_organizationId_fkey` FOREIGN KEY (`organizationId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -372,6 +410,9 @@ ALTER TABLE `Prescription` ADD CONSTRAINT `Prescription_consultationId_fkey` FOR
 ALTER TABLE `products` ADD CONSTRAINT `products_organizationId_fkey` FOREIGN KEY (`organizationId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `products` ADD CONSTRAINT `products_category_id_fkey` FOREIGN KEY (`category_id`) REFERENCES `product_categories`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `services` ADD CONSTRAINT `services_organizationId_fkey` FOREIGN KEY (`organizationId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -403,3 +444,12 @@ ALTER TABLE `FiscalItem` ADD CONSTRAINT `FiscalItem_fiscalDocumentId_fkey` FOREI
 
 -- AddForeignKey
 ALTER TABLE `Payment` ADD CONSTRAINT `Payment_fiscalDocumentId_fkey` FOREIGN KEY (`fiscalDocumentId`) REFERENCES `FiscalDocument`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `plans` ADD CONSTRAINT `plans_organizationId_fkey` FOREIGN KEY (`organizationId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_planId_fkey` FOREIGN KEY (`planId`) REFERENCES `plans`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `subscriptions` ADD CONSTRAINT `subscriptions_organizationId_fkey` FOREIGN KEY (`organizationId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

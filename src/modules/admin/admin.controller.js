@@ -1,9 +1,11 @@
 ﻿const service = require('./admin.service');
+const { AppError } = require('../../core/errors/AppError');
 
 const getDashboardMetrics = async (req, res, next) => {
   try {
-    const metrics = await service.getDashboardMetrics(req.user);
-    res.json({ metrics });
+    const user = req.user;
+    const data = await service.getDashboardMetrics(user);
+    res.json({ metrics: data });
   } catch (error) {
     next(error);
   }
@@ -11,8 +13,9 @@ const getDashboardMetrics = async (req, res, next) => {
 
 const getClinics = async (req, res, next) => {
   try {
-    const payload = await service.listClinics(req.user);
-    res.json(payload);
+    const user = req.user;
+    const data = await service.listClinics(user);
+    res.json({ clinics: data });
   } catch (error) {
     next(error);
   }
@@ -20,8 +23,9 @@ const getClinics = async (req, res, next) => {
 
 const getUsers = async (req, res, next) => {
   try {
-    const payload = await service.listUsers(req.user);
-    res.json(payload);
+    const user = req.user;
+    const data = await service.listUsers(user);
+    res.json({ users: data });
   } catch (error) {
     next(error);
   }

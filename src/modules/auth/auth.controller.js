@@ -1,4 +1,4 @@
-const authService = require('./auth.service');
+﻿const authService = require('./auth.service');
 const { setAuthCookie, clearAuthCookie } = require('../../core/utils/cookie.util');
 
 let env = null;
@@ -36,6 +36,9 @@ const register = async (req, res, next) => {
 
     const { user, token, organization } = await authService.register(username, email, password);
 
+    // Agregar header informativo sobre el modo de autenticacion
+    res.setHeader('X-Auth-Mode', env().authViaCookie ? 'cookie' : 'header');
+
     // En modo cookie, establecer la cookie y no devolver token en el cuerpo
     if (env().authViaCookie) {
       setAuthCookie(res, token);
@@ -53,8 +56,6 @@ const register = async (req, res, next) => {
         organization
       });
     }
-    // Agregar header informativo sobre el modo de autenticacion
-    res.setHeader('X-Auth-Mode', env().authViaCookie ? 'cookie' : 'header');
   } catch (error) {
     next(error);
   }
@@ -70,6 +71,9 @@ const login = async (req, res, next) => {
 
     const { user, token } = await authService.login(email, password, parseInt(organizationId));
 
+    // Agregar header informativo sobre el modo de autenticacion
+    res.setHeader('X-Auth-Mode', env().authViaCookie ? 'cookie' : 'header');
+
     // En modo cookie, establecer la cookie y no devolver token en el cuerpo
     if (env().authViaCookie) {
       setAuthCookie(res, token);
@@ -85,8 +89,6 @@ const login = async (req, res, next) => {
         user
       });
     }
-    // Agregar header informativo sobre el modo de autenticacion
-    res.setHeader('X-Auth-Mode', env().authViaCookie ? 'cookie' : 'header');
   } catch (error) {
     next(error);
   }
