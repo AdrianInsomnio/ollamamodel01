@@ -1,57 +1,31 @@
-const service = require('./pet.service');
+﻿'use strict';
+const petService = require('./pet.service');
+const { catchAsync } = require('../../utils/catchAsync');
 
-const create = async (req, res, next) => {
-  try {
-    const item = await service.create(req.body, req.user.organizationId);
-    res.status(201).json({ pet: item });
-  } catch (error) {
-    next(error);
-  }
-};
+exports.createPet = catchAsync(async (req, res) => {
+  const petData = { ...req.body, organizationId: req.user.organizationId };
+  const pet = await petService.createPet(petData);
+  res.status(201).json({ status: 'success', data: { pet } });
+});
 
-const getAll = async (req, res, next) => {
-  try {
-    const items = await service.getAll(req.user.organizationId);
-    res.json({ pets: items });
-  } catch (error) {
-    next(error);
-  }
-};
+exports.getPet = catchAsync(async (req, res) => {
+  const pet = await petService.getPetById(req.params.id);
+  res.status(200).json({ status: 'success', data: { pet } });
+});
 
-const getById = async (req, res, next) => {
-  try {
-    const item = await service.getById(parseInt(req.params.id), req.user.organizationId);
-    res.json({ pet: item });
-  } catch (error) {
-    next(error);
-  }
-};
+exports.getPets = catchAsync(async (req, res) => {
+  const pets = await petService.getPets(req.query);
+  res.status(200).json({ status: 'success', results: pets.length, data: { pets } });
+});
 
-const update = async (req, res, next) => {
-  try {
-    const item = await service.update(parseInt(req.params.id), req.user.organizationId, req.body);
-    res.json({ pet: item });
-  } catch (error) {
-    next(error);
-  }
-};
+exports.updatePet = catchAsync(async (req, res) => {
+  // Remove organizationId from body to prevent changing ownership
+  const { organizationId, ...petData } = req.body;
+  const pet = await petService.updatePet(req.params.id, petData);
+  res.status(200).json({ status: 'success', data: { pet } });
+});
 
-const remove = async (req, res, next) => {
-  try {
-    await service.remove(parseInt(req.params.id), req.user.organizationId);
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getFullHistory = async (req, res, next) => {
-  try {
-    const history = await service.getFullHistory(parseInt(req.params.id), req.user.organizationId);
-    res.json(history);
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = { create, getAll, getById, update, remove, getFullHistory };
+exports.deletePet = catchAsync(async (req, res) => {
+  await petService.deletePet(req.params.id);
+  res.status(204).json();
+});

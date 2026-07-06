@@ -1,80 +1,46 @@
-const { prisma } = require('../../lib/prisma');
+﻿'use strict';
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-const create = async (data, organizationId) => {
-  return await prisma.pet.create({
-    data: {
-      ...data,
-      organizationId
-    },
-    include: {
-      client: {
-        select: { id: true, name: true }
-      }
+class PetRepository {
+  async create(data) {
+    let createData = { ...data };
+    if (createData.clientId !== undefined) {
+      createData.client = { connect: { id: createData.clientId } };
+      delete createData.clientId;
     }
-  });
-};
-
-const findAll = async (organizationId) => {
-  return await prisma.pet.findMany({
-    where: { organizationId },
-    include: {
-      client: {
-        select: { id: true, name: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-};
-
-const findById = async (id, organizationId) => {
-  return await prisma.pet.findFirst({
-    where: { id, organizationId },
-    include: {
-      client: {
-        select: { id: true, name: true }
-      }
+    if (createData.organizationId !== undefined) {
+      createData.organization = { connect: { id: createData.organizationId } };
+      delete createData.organizationId;
     }
-  });
-};
+    return await prisma.pet.create({ data: createData });
+  }
 
-const update = async (id, organizationId, data) => {
-  return await prisma.pet.update({
-    where: { id, organizationId },
-    data
-  });
-};
+  async findById(id) {
+    return await prisma.pet.findUnique({ where: { id: Number(id) } });
+  }
 
-const remove = async (id, organizationId) => {
-  return await prisma.pet.delete({
-    where: { id, organizationId }
-  });
-};
+  async findMany(params = {}) {
+    const { skip, take, where, orderBy } = params;
+    return await prisma.pet.findMany({ skip, take, where, orderBy });
+  }
 
-const getFullHistory = async (id, organizationId) => {
-  return await prisma.pet.findFirst({
-    where: { id, organizationId },
-    include: {
-      client: true,
-      consultations: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          diagnoses: true,
-          treatments: true,
-          prescriptions: true
-        }
-      },
-      appointments: {
-        orderBy: { date: 'desc' }
-      },
-      sales: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          items: true
-        }
-      }
+  async update(id, data) {
+    let updateData = { ...data };
+    if (updateData.clientId !== undefined) {
+      updateData.client = { connect: { id: updateData.clientId } };
+      delete updateData.clientId;
     }
-  });
-};
+    if (updateData.organizationId !== undefined) {
+      updateData.organization = { connect: { id: updateData.organizationId } };
+      delete updateData.organizationId;
+    }
+    return await prisma.pet.update({ where: { id: Number(id) }, data: updateData });
+  }
 
-module.exports = { create, findAll, findById, update, remove, getFullHistory };
+  async delete(id) {
+    return await prisma.pet.delete({ where: { id: Number(id) } });
+  }
+}
 
+module.exports = new PetRepository();
