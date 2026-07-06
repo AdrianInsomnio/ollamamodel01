@@ -60,6 +60,48 @@ const getSubscriptionsByOrganization = async (organizationId) => {
   return await repository.getSubscriptionsByOrganization(organizationId);
 };
 
+// CRUD para clínicas asociadas a una organization
+const createClinic = async (data, organizationId) => {
+  // data: { name, address, ... }
+  return await repository.createClinic(data, organizationId);
+};
+
+const getClinicById = async (id, organizationId) => {
+  const clinic = await repository.getClinicById(id, organizationId);
+  if (!clinic) {
+    throw new AppError('Clinic not found', 404);
+  }
+  return clinic;
+};
+
+const getClinicsByOrganization = async (organizationId) => {
+  return await repository.getClinicsByOrganization(organizationId);
+};
+
+const updateClinic = async (id, data, organizationId) => {
+  await getClinicById(id, organizationId);
+  return await repository.updateClinic(id, data, organizationId);
+};
+
+const deleteClinic = async (id, organizationId) => {
+  await getClinicById(id, organizationId);
+  return await repository.deleteClinic(id, organizationId);
+};
+
+// Asociaciones: vincular clínica a plan o suscripción
+const associateClinicToPlan = async (clinicId, planId, organizationId) => {
+  await getClinicById(clinicId, organizationId);
+  await getPlanById(planId, organizationId);
+  return await repository.associateClinicToPlan(clinicId, planId, organizationId);
+};
+
+const associateClinicToSubscription = async (clinicId, subscriptionId, organizationId) => {
+  await getClinicById(clinicId, organizationId);
+  await getSubscriptionById(subscriptionId, organizationId);
+  return await repository.associateClinicToSubscription(clinicId, subscriptionId, organizationId);
+};
+
+
 module.exports = {
   getPlans,
   getPlanById,
@@ -71,5 +113,12 @@ module.exports = {
   createSubscription,
   updateSubscription,
   deleteSubscription,
-  getSubscriptionsByOrganization
+  getSubscriptionsByOrganization,
+  createClinic,
+  getClinicById,
+  getClinicsByOrganization,
+  updateClinic,
+  deleteClinic,
+  associateClinicToPlan,
+  associateClinicToSubscription
 };

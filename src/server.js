@@ -1,10 +1,12 @@
 const { env } = require('./config/env');
+console.log('authViaCookie:', env.authViaCookie);
 const app = require('./app');
 const { testConnection } = require('./config/connection');
 const { initDatabase } = require('./config/initDb');
 const { prisma } = require('./lib/prisma');
 
 const PORT = env.port || 3000;
+console.log('PORT:', PORT);
 
 const startServer = async () => {
   try {
@@ -21,6 +23,7 @@ const startServer = async () => {
     await prisma.$connect();
     console.log('Prisma connected successfully');
 
+console.log("About to start listening on port " + PORT);
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

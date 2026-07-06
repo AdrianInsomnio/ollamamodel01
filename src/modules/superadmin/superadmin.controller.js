@@ -99,6 +99,72 @@ const getSubscriptionsByOrganization = async (req, res, next) => {
   }
 };
 
+const createClinic = async (req, res, next) => {
+  try {
+    const item = await service.createClinic(req.body, req.user.organizationId);
+    res.status(201).json(item);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getClinicById = async (req, res, next) => {
+  try {
+    const item = await service.getClinicById(parseInt(req.params.id), req.user.organizationId);
+    res.json({ clinic: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getClinicsByOrganization = async (req, res, next) => {
+  try {
+    const items = await service.getClinicsByOrganization(req.user.organizationId);
+    res.json({ clinics: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateClinic = async (req, res, next) => {
+  try {
+    await service.updateClinic(parseInt(req.params.id), req.body, req.user.organizationId);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteClinic = async (req, res, next) => {
+  try {
+    await service.deleteClinic(parseInt(req.params.id), req.user.organizationId);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const associateClinicToPlan = async (req, res, next) => {
+  try {
+    const { clinicId, planId } = req.body;
+    const item = await service.associateClinicToPlan(clinicId, planId, req.user.organizationId);
+    res.json({ clinic: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const associateClinicToSubscription = async (req, res, next) => {
+  try {
+    const { clinicId, subscriptionId } = req.body;
+    const item = await service.associateClinicToSubscription(clinicId, subscriptionId, req.user.organizationId);
+    res.json({ clinic: item });
+  } catch (error) {
+    next(error);
+  }
+};  
+
+
 module.exports = {
   getPlans,
   getPlanById,
@@ -110,5 +176,12 @@ module.exports = {
   createSubscription,
   updateSubscription,
   deleteSubscription,
-  getSubscriptionsByOrganization
+  getSubscriptionsByOrganization,
+  createClinic,
+  getClinicById,
+  getClinicsByOrganization,
+  updateClinic,
+  deleteClinic,
+  associateClinicToPlan,
+  associateClinicToSubscription     
 };
