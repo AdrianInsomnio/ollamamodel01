@@ -56,13 +56,16 @@ const createSubscription = async (data, organizationId) => {
 };
 
 const updateSubscription = async (id, data, organizationId) => {
+  await getSubscriptionById(id, organizationId);
   return await prisma.subscription.update({
-    where: { id: Number(id), organizationId },
-    data
+    id: Number(id),
+    data,
+    organizationId
   });
 };
 
 const deleteSubscription = async (id, organizationId) => {
+  await getSubscriptionById(id, organizationId);
   return await prisma.subscription.delete({
     where: { id: Number(id), organizationId }
   });
@@ -95,8 +98,10 @@ const getClinicsByOrganization = async (organizationId) => {
   return await prisma.clinic.findMany({
     where: { organizationId }
   });
-};       
+};
+
 const updateClinic = async (id, data, organizationId) => {
+  await getClinicById(id, organizationId);
   return await prisma.clinic.update({
     where: { id: Number(id), organizationId },
     data
@@ -104,12 +109,15 @@ const updateClinic = async (id, data, organizationId) => {
 };
 
 const deleteClinic = async (id, organizationId) => {
+  await getClinicById(id, organizationId);
   return await prisma.clinic.delete({
     where: { id: Number(id), organizationId }
   });
 };
 
 const associateClinicToPlan = async (clinicId, planId, organizationId) => {
+  await getClinicById(clinicId, organizationId);
+  await getPlanById(planId, organizationId);
   return await prisma.clinic.update({
     where: { id: Number(clinicId), organizationId },
     data: {
@@ -119,15 +127,21 @@ const associateClinicToPlan = async (clinicId, planId, organizationId) => {
 };
 
 const associateClinicToSubscription = async (clinicId, subscriptionId, organizationId) => {
+  await getClinicById(clinicId, organizationId);
+  await getSubscriptionById(subscriptionId, organizationId);
   return await prisma.clinic.update({
     where: { id: Number(clinicId), organizationId },
     data: {
       subscriptionId: Number(subscriptionId)
     }
   });
-};  
+};
 
-
+const createOrganization = async (data) => {
+  return await prisma.organization.create({
+    data
+  });
+};
 
 module.exports = {
   getPlans,
@@ -141,12 +155,13 @@ module.exports = {
   updateSubscription,
   deleteSubscription,
   getSubscriptionsByOrganization,
-  //
+  // 
   createClinic,
   getClinicById,
   getClinicsByOrganization,
   updateClinic,
   deleteClinic,
   associateClinicToPlan,
-  associateClinicToSubscription
+  associateClinicToSubscription,
+  createOrganization
 };

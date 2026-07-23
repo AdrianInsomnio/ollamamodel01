@@ -3,7 +3,7 @@ const { setAuthCookie, clearAuthCookie } = require('../../core/utils/cookie.util
 
 let env = null;
 try {
-  // Lazy require para que los tests puedan mutar env antes de leerlo.
+  // Lazy para que los tests puedan mutar env antes de leerlo.
   // El modulo config/env exporta { env }, y leemos su propiedad actual
   // en cada llamada, no destructurando.
   env = () => require('../../config/env').env;
@@ -19,7 +19,7 @@ try {
  */
 const logout = async (req, res, next) => {
   try {
-    // Si estamos en modo cookie, limpiamos la cookie
+    // Si estamos en modo cookie, limpia la cookie
     if (env().authViaCookie) {
       clearAuthCookie(res);
     }
@@ -63,13 +63,14 @@ const register = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password, organizationId } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password || !organizationId) {
-      return res.status(400).json({ error: 'Email, password and organizationId are required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const { user, token } = await authService.login(email, password, parseInt(organizationId));
+    const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '';
+    const { user, token } = await authService.login(email, password, ip);
 
     // Agregar header informativo sobre el modo de autenticacion
     res.setHeader('X-Auth-Mode', env().authViaCookie ? 'cookie' : 'header');
@@ -95,3 +96,4 @@ const login = async (req, res, next) => {
 };
 
 module.exports = { register, login, logout };
+

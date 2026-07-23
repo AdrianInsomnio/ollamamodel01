@@ -101,6 +101,11 @@ const associateClinicToSubscription = async (clinicId, subscriptionId, organizat
   return await repository.associateClinicToSubscription(clinicId, subscriptionId, organizationId);
 };
 
+// CREAR ORGANIZACIÓN
+const createOrganization = async (data) => {
+  return await repository.createOrganization(data);
+};
+
 
 module.exports = {
   getPlans,
@@ -120,5 +125,6 @@ module.exports = {
   updateClinic,
   deleteClinic,
   associateClinicToPlan,
-  associateClinicToSubscription
+  associateClinicToSubscription,
+  createOrganization
 };

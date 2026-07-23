@@ -28,6 +28,8 @@ router.get('/clinics/organization/:organizationId', authorize(ROLES.SUPER_ADMIN)
 router.put('/clinics/:id', authorize(ROLES.SUPER_ADMIN), controller.updateClinic);
 router.delete('/clinics/:id', authorize(ROLES.SUPER_ADMIN), controller.deleteClinic);
 // Associate clinic to plan
+router.post('/organization', authorize(ROLES.SUPER_ADMIN), controller.createOrganization);
+
 router.post('/clinics/:clinicId/associate-plan/:planId', authorize(ROLES.SUPER_ADMIN), controller.associateClinicToPlan);
 // Associate clinic to subscription
 router.post('/clinics/:clinicId/associate-subscription/:subscriptionId', authorize(ROLES.SUPER_ADMIN), controller.associateClinicToSubscription);   
