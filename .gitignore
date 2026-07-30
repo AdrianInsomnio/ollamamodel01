@@ -5,3 +5,22 @@ node_modules/
 .DS_Store
 
 /src/generated/prisma
+
+# Stale backups and obsolete artifacts (T1 cleanup)
+*.bak
+*.backup
+*.backup2
+*.tmp
+*.tmp1
+*.original
+*.copy
+*.prisa
+/node/
+/ollmodel@1.0.0/
+/prisma/old_back/
+/prisma/schema.prisa
+/prisma/schema.prisma.bak
+/prisma/schema.prisma.copy
+/prisma/schema.prisma.tmp
+/prisma/schema.prisma.backup
+
