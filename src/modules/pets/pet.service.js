@@ -1,70 +1,93 @@
-const repository = require('./pet.repository');
+﻿'use strict';
+const petRepository = require('./pet.repository');
+const clientRepository = require('../clients/client.repository');
+const Joi = require('joi');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, organizationId) => {
-  return await repository.create(data, organizationId);
-};
+const petCreateSchema = Joi.object({
+  name: Joi.string().min(1).max(100).required(),
+  species: Joi.string().min(1).max(50).required(),
+  breed: Joi.string().allow('').max(50).optional(),
+  birthDate: Joi.date().iso().allow(null).optional(),
+  birthDateEstimated: Joi.boolean().optional(),
+  deathDate: Joi.date().iso().allow(null).optional(),
+  weight: Joi.number().positive().precision(2).allow(null).optional(),
+  color: Joi.string().allow('').max(30).optional(),
+  microchip: Joi.string().allow('').max(50).optional(),
+  notes: Joi.string().allow('').max(500).optional(),
+  clientId: Joi.number().integer().positive().required(),
+  clinicId: Joi.number().integer().positive().required(),
+});
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
-};
+const petUpdateSchema = Joi.object({
+  name: Joi.string().min(1).max(100).optional(),
+  species: Joi.string().min(1).max(50).optional(),
+  breed: Joi.string().allow('').max(50).optional(),
+  birthDate: Joi.date().iso().allow(null).optional(),
+  birthDateEstimated: Joi.boolean().optional(),
+  deathDate: Joi.date().iso().allow(null).optional(),
+  weight: Joi.number().positive().precision(2).allow(null).optional(),
+  color: Joi.string().allow('').max(30).optional(),
+  microchip: Joi.string().allow('').max(50).optional(),
+  notes: Joi.string().allow('').max(500).optional(),
+  clientId: Joi.number().integer().positive().optional(),
+  clinicId: Joi.number().integer().positive().optional(),
+});
 
-const getById = async (id, organizationId) => {
-  const item = await repository.findById(id, organizationId);
-  if (!item) {
-    throw new AppError('Pet not found', 404);
+class PetService {
+  async createPet(data) {
+    const { error, value } = petCreateSchema.validate(data, { abortEarly: false });
+    if (error) {
+      const details = error.details.map(d => d.message).join('. ');
+      throw new AppError('Datos de entrada invalidos: ' + details, 400);
+    }
+    // Verificar que el cliente exista y pertenezca al clinicId indicado.
+    const client = await clientRepository.findById(value.clientId, value.clinicId);
+    if (!client) {
+      throw new AppError('Client not found in the specified clinic', 404);
+    }
+    return await petRepository.create(value, value.clinicId);
   }
-  return item;
-};
 
-const update = async (id, organizationId, data) => {
-  await getById(id, organizationId);
-  return await repository.update(id, organizationId, data);
-};
-
-const remove = async (id, organizationId) => {
-  await getById(id, organizationId);
-  return await repository.remove(id, organizationId);
-};
-
-const getFullHistory = async (id, organizationId) => {
-  const pet = await repository.getFullHistory(id, organizationId);
-  if (!pet) {
-    throw new AppError('Pet not found', 404);
+  async getPetById(id, clinicId) {
+    const pet = await petRepository.findById(Number(id));
+    if (!pet) {
+      throw new AppError('Pet not found', 404);
+    }
+    if (clinicId !== undefined && clinicId !== null) {
+      const owner = await clientRepository.findById(pet.clientId, clinicId);
+      if (!owner) {
+        throw new AppError('Pet not found in the specified clinic', 404);
+      }
+    }
+    return pet;
   }
 
-  // Calcular estadísticas
-  const totalSpent = pet.sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-  const totalConsultations = pet.consultations.length;
-  const totalAppointments = pet.appointments.length;
+  async getPets(filters, clinicId) {
+    const where = { ...(filters || {}) };
+    if (clinicId !== undefined && clinicId !== null) {
+      where.clinicId = clinicId;
+    }
+    return await petRepository.findMany({ where });
+  }
 
-  // Calcular última visita
-  const lastVisit = pet.consultations[0]?.createdAt || pet.appointments[0]?.date || null;
+  async updatePet(id, data, clinicId) {
+    await this.getPetById(id, clinicId);
+    const { error, value } = petUpdateSchema.validate(data, { abortEarly: false });
+    if (error) {
+      const details = error.details.map(d => d.message).join('. ');
+      throw new AppError('Datos de entrada invalidos: ' + details, 400);
+    }
+    if (value.clinicId && clinicId && value.clinicId !== clinicId) {
+      throw new AppError('Cannot move pet to a different clinic', 403);
+    }
+    return await petRepository.update(id, value);
+  }
 
-  return {
-    pet: {
-      id: pet.id,
-      name: pet.name,
-      species: pet.species,
-      breed: pet.breed,
-      birthDate: pet.birthDate,
-      weight: pet.weight,
-      color: pet.color,
-      microchip: pet.microchip,
-      notes: pet.notes,
-      isActive: pet.isActive
-    },
-    client: pet.client,
-    stats: {
-      totalSpent,
-      totalConsultations,
-      totalAppointments,
-      lastVisit
-    },
-    consultations: pet.consultations,
-    appointments: pet.appointments,
-    sales: pet.sales
-  };
-};
+  async deletePet(id, clinicId) {
+    await this.getPetById(id, clinicId);
+    return await petRepository.delete(id);
+  }
+}
 
-module.exports = { create, getAll, getById, update, remove, getFullHistory };
+module.exports = new PetService();

@@ -11,7 +11,7 @@ const mockRes = {
 const mockNext = jest.fn();
 
 // Mockear el servicio antes de importar el controlador
-jest.mock('./superadmin.service', () => mockService);
+jest.mock('../../../src/modules/superadmin/superadmin.service', () => mockService);
 
 // Importar el controlador después de mockear
 const { createOrganization } = require('../../../src/modules/superadmin/superadmin.controller');

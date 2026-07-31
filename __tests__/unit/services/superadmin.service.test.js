@@ -7,9 +7,9 @@ const mockRes = {};
 const mockNext = jest.fn();
 
 // Mockear el repositorio antes de importar el servicio
-jest.mock('./superadmin.repository', () => mockRepository);
+jest.mock('../../../src/modules/superadmin/superadmin.repository', () => mockRepository);
 
-// Importar el servicio después de mockear
+// Importar el servicio despu�s de mockear
 const { createOrganization } = require('../../../src/modules/superadmin/superadmin.service');
 
 describe('SuperAdmin Service - createOrganization', () => {
@@ -37,4 +37,5 @@ describe('SuperAdmin Service - createOrganization', () => {
 
     await expect(createOrganization(inputData)).rejects.toThrow(errorMessage);
   });
-};
+});
+

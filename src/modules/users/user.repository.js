@@ -1,16 +1,36 @@
-const { prisma } = require('../../lib/prisma');
+﻿const { prisma } = require('../../lib/prisma');
 
-const findUserById = async (id, organizationId) => {
+const findUserById = async (id, clinicId) => {
+  const where = { id };
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
   return await prisma.user.findFirst({
-    where: { id, organizationId },
-    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      createdAt: true,
+      clinics: { select: { id: true, name: true } },
+    },
   });
 };
 
-const getAllUsers = async (organizationId) => {
+const getAllUsers = async (clinicId) => {
+  const where = {};
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
   return await prisma.user.findMany({
-    where: { organizationId },
-    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      createdAt: true,
+      clinics: { select: { id: true, name: true } },
+    },
   });
 };
 

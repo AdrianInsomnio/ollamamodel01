@@ -1,31 +1,44 @@
 ﻿'use strict';
 const petService = require('./pet.service');
 const { catchAsync } = require('../../utils/catchAsync');
+const { AppError } = require('../../core/errors/AppError');
+
+const requireClinicId = (user) => {
+  if (user == null || user.clinicId == null) {
+    throw new AppError('User has no clinic assigned', 403, 'NO_CLINIC_ASSIGNED');
+  }
+  return Number(user.clinicId);
+};
 
 exports.createPet = catchAsync(async (req, res) => {
-  const petData = { ...req.body, organizationId: req.user.organizationId };
+  const clinicId = requireClinicId(req.user);
+  const petData = { ...req.body, clinicId };
   const pet = await petService.createPet(petData);
-  res.status(201).json({ status: 'success', data: { pet } });
+  res.status(201).json({ pet });
 });
 
 exports.getPet = catchAsync(async (req, res) => {
-  const pet = await petService.getPetById(req.params.id);
-  res.status(200).json({ status: 'success', data: { pet } });
+  const clinicId = requireClinicId(req.user);
+  const pet = await petService.getPetById(req.params.id, clinicId);
+  res.status(200).json({ pet });
 });
 
 exports.getPets = catchAsync(async (req, res) => {
-  const pets = await petService.getPets(req.query);
-  res.status(200).json({ status: 'success', results: pets.length, data: { pets } });
+  const clinicId = requireClinicId(req.user);
+  const pets = await petService.getPets(req.query, clinicId);
+  res.status(200).json({ pets });
 });
 
 exports.updatePet = catchAsync(async (req, res) => {
-  // Remove organizationId from body to prevent changing ownership
-  const { organizationId, ...petData } = req.body;
-  const pet = await petService.updatePet(req.params.id, petData);
-  res.status(200).json({ status: 'success', data: { pet } });
+  const clinicId = requireClinicId(req.user);
+  // Refuse tenant overrides via body
+  const { clinicId: _ignored, organizationId: _ignored2, ...petData } = req.body;
+  const pet = await petService.updatePet(req.params.id, petData, clinicId);
+  res.status(200).json({ pet });
 });
 
 exports.deletePet = catchAsync(async (req, res) => {
-  await petService.deletePet(req.params.id);
+  const clinicId = requireClinicId(req.user);
+  await petService.deletePet(req.params.id, clinicId);
   res.status(204).json();
 });

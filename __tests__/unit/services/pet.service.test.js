@@ -1,95 +1,136 @@
 ﻿'use strict';
 
+const petService = require('../../../src/modules/pets/pet.service');
 const petRepository = require('../../../src/modules/pets/pet.repository');
+const clientRepository = require('../../../src/modules/clients/client.repository');
 
-// Mocks
 jest.mock('../../../src/modules/pets/pet.repository');
+jest.mock('../../../src/modules/clients/client.repository');
 
-const mockPet = {
-  id: 1,
+const mockPetRepository = jest.mocked(petRepository);
+const mockClientRepository = jest.mocked(clientRepository);
+
+const validClinicId = 7;
+
+const validPetPayload = {
   name: 'Bobby',
   species: 'Dog',
   breed: 'Golden Retriever',
   birthDate: '2020-01-01',
   weight: 25,
   clientId: 1,
-  tenantId: 'tenant1',
+  clinicId: validClinicId,
+};
+
+const mockPet = {
+  id: 1,
+  name: validPetPayload.name,
+  species: validPetPayload.species,
+  breed: validPetPayload.breed,
+  birthDate: new Date(validPetPayload.birthDate).toISOString(),
+  weight: validPetPayload.weight,
+  clientId: validPetPayload.clientId,
+  clinicId: validClinicId,
   createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
+  updatedAt: new Date().toISOString(),
 };
 
 describe('Pet Service', () => {
-  let petService;
-
-  beforeAll(() => {
-    petService = require('../../../src/modules/pets/pet.service');
-  });
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe('createPet', () => {
-    it('should create a pet successfully', async () => {
-      petRepository.create.mockResolvedValue(mockPet);
-      const pet = await petService.createPet(mockPet);
-      expect(pet).toEqual(mockPet);
-      expect(petRepository.create).toHaveBeenCalledWith(mockPet);
+    it('deberia crear una mascota cuando el cliente pertenece a la clinica', async () => {
+      mockClientRepository.findById.mockResolvedValue({ id: validPetPayload.clientId, clinicId: validClinicId });
+      mockPetRepository.create.mockResolvedValue(mockPet);
+
+      const result = await petService.createPet(validPetPayload);
+
+      expect(mockClientRepository.findById).toHaveBeenCalledWith(validPetPayload.clientId, validClinicId);
+      // Joi normaliza birthDate a Date; comparamos contra el payload saneado
+      expect(mockPetRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: validPetPayload.name,
+          species: validPetPayload.species,
+          breed: validPetPayload.breed,
+          clientId: validPetPayload.clientId,
+          clinicId: validClinicId,
+        }),
+        validClinicId
+      );
+      expect(result).toEqual(mockPet);
     });
 
-    it('should throw error if name missing', async () => {
-      await expect(petService.createPet({ species: 'Dog' })).rejects.toThrow('Name and species are required');
+    it('deberia lanzar 400 si falta name o species', async () => {
+      await expect(petService.createPet({ ...validPetPayload, name: '' })).rejects.toMatchObject({ statusCode: 400 });
+      await expect(petService.createPet({ ...validPetPayload, species: '' })).rejects.toMatchObject({ statusCode: 400 });
     });
 
-    it('should throw error if species missing', async () => {
-      await expect(petService.createPet({ name: 'Bobby' })).rejects.toThrow('Name and species are required');
+    it('deberia lanzar 404 si el cliente no existe o pertenece a otra clinica', async () => {
+      mockClientRepository.findById.mockResolvedValue(null);
+      await expect(petService.createPet(validPetPayload)).rejects.toMatchObject({ statusCode: 404 });
     });
   });
 
   describe('getPetById', () => {
-    it('should return a pet by ID', async () => {
-      petRepository.findById.mockResolvedValue(mockPet);
-      const pet = await petService.getPetById(mockPet.id);
-      expect(pet).toEqual(mockPet);
-      expect(petRepository.findById).toHaveBeenCalledWith(mockPet.id);
+    it('deberia devolver la mascota si pertenece a la clinica', async () => {
+      mockPetRepository.findById.mockResolvedValue(mockPet);
+      mockClientRepository.findById.mockResolvedValue({ id: mockPet.clientId, clinicId: validClinicId });
+
+      const result = await petService.getPetById(mockPet.id, validClinicId);
+      expect(result).toEqual(mockPet);
     });
 
-    it('should throw error if pet not found', async () => {
-      petRepository.findById.mockResolvedValue(null);
-      await expect(petService.getPetById(999)).rejects.toThrow('Pet not found');
+    it('deberia lanzar 404 si la mascota no existe', async () => {
+      mockPetRepository.findById.mockResolvedValue(null);
+      await expect(petService.getPetById(999, validClinicId)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('deberia lanzar 404 si la mascota pertenece a otra clinica', async () => {
+      mockPetRepository.findById.mockResolvedValue(mockPet);
+      mockClientRepository.findById.mockResolvedValue(null);
+      await expect(petService.getPetById(mockPet.id, validClinicId)).rejects.toMatchObject({ statusCode: 404 });
     });
   });
 
   describe('getPets', () => {
-    it('should return pets with filters', async () => {
-      const pets = [mockPet];
-      petRepository.findMany.mockResolvedValue(pets);
-      const result = await petService.getPets({ limit: 10 });
-      expect(result).toEqual(pets);
-      expect(petRepository.findMany).toHaveBeenCalledWith({ limit: 10 });
+    it('deberia pasar clinicId al repositorio', async () => {
+      mockPetRepository.findMany.mockResolvedValue([mockPet]);
+      const result = await petService.getPets({}, validClinicId);
+      expect(mockPetRepository.findMany).toHaveBeenCalledWith({ where: { clinicId: validClinicId } });
+      expect(result).toEqual([mockPet]);
     });
   });
 
   describe('updatePet', () => {
-    it('should update a pet successfully', async () => {
-      const updatedData = { name: 'NewName' };
-      const updatedPet = { ...mockPet, ...updatedData };
-      petService.getPetById = jest.fn().mockResolvedValue(mockPet);
-      petRepository.update.mockResolvedValue(updatedPet);
-      const pet = await petService.updatePet(mockPet.id, updatedData);
-      expect(pet).toEqual(updatedPet);
-      expect(petService.getPetById).toHaveBeenCalledWith(mockPet.id);
-      expect(petRepository.update).toHaveBeenCalledWith(mockPet.id, updatedData);
+    it('deberia actualizar la mascota', async () => {
+      mockPetRepository.findById.mockResolvedValue(mockPet);
+      mockClientRepository.findById.mockResolvedValue({ id: mockPet.clientId, clinicId: validClinicId });
+      mockPetRepository.update.mockResolvedValue({ ...mockPet, name: 'NewName' });
+
+      const result = await petService.updatePet(mockPet.id, { name: 'NewName' }, validClinicId);
+      expect(result.name).toBe('NewName');
+    });
+
+    it('deberia rechazar cambio de clinicId', async () => {
+      mockPetRepository.findById.mockResolvedValue(mockPet);
+      mockClientRepository.findById.mockResolvedValue({ id: mockPet.clientId, clinicId: validClinicId });
+
+      await expect(
+        petService.updatePet(mockPet.id, { clinicId: 99 }, validClinicId)
+      ).rejects.toMatchObject({ statusCode: 403 });
     });
   });
 
   describe('deletePet', () => {
-    it('should delete a pet', async () => {
-      petService.getPetById = jest.fn().mockResolvedValue(mockPet);
-      petRepository.delete.mockResolvedValue(mockPet);
-      await petService.deletePet(mockPet.id);
-      expect(petService.getPetById).toHaveBeenCalledWith(mockPet.id);
-      expect(petRepository.delete).toHaveBeenCalledWith(mockPet.id);
+    it('deberia eliminar la mascota', async () => {
+      mockPetRepository.findById.mockResolvedValue(mockPet);
+      mockClientRepository.findById.mockResolvedValue({ id: mockPet.clientId, clinicId: validClinicId });
+      mockPetRepository.delete.mockResolvedValue(mockPet);
+
+      await petService.deletePet(mockPet.id, validClinicId);
+      expect(mockPetRepository.delete).toHaveBeenCalledWith(mockPet.id);
     });
   });
 });

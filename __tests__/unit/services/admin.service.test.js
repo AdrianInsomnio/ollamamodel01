@@ -183,12 +183,8 @@ describe('Admin Service - getDashboardMetrics', () => {
       });
 
       expect(mockAdminRepository.getClinicMetrics).toHaveBeenCalledTimes(2);
-      expect(mockAdminRepository.getClinicMetrics).toHaveBeenCalledWith(
-        10, 1, 'America/Montevideo'
-      );
-      expect(mockAdminRepository.getClinicMetrics).toHaveBeenCalledWith(
-        11, 1, 'America/Montevideo'
-      );
+      expect(mockAdminRepository.getClinicMetrics).toHaveBeenCalledWith(10, expect.any(Date), expect.any(Date));
+      expect(mockAdminRepository.getClinicMetrics).toHaveBeenCalledWith(11, expect.any(Date), expect.any(Date));
     });
   });
 });
@@ -365,3 +361,4 @@ describe('Admin Repository - getDayRangeInTimezone', () => {
     expect(e2).toBeInstanceOf(Date);
   });
 });
+
