@@ -8,7 +8,7 @@ jest.mock('../../src/lib/prisma', () => ({
       upsert: jest.fn(async () => ({})),
       delete: jest.fn(async () => ({})),
     },
-    users: { findFirst: jest.fn(), findUnique: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
     organization: { findUnique: jest.fn() },
     client: { findFirst: jest.fn() },
   },

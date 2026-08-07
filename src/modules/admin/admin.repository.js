@@ -1,4 +1,4 @@
-﻿const { prisma } = require('../../lib/prisma');
+const { prisma } = require('../../lib/prisma');
 const { AppError } = require('../../core/errors/AppError');
 
 /**
@@ -115,7 +115,7 @@ const getClinicMetrics = async (clinicId, start, end) => {
 };
 
 const findUsersWithMetrics = async (organizationId) => {
-  return await prisma.users.findMany({
+  return await prisma.user.findMany({
     where: { organizationId: Number(organizationId) },
     select: {
       id: true,
@@ -159,7 +159,7 @@ const createUser = async (data) => {
 
 const updateUserClinics = async (userId, clinicIds) => {
   const clinicIdNumbers = clinicIds.map(Number);
-  await prisma.users.update({
+  await prisma.user.update({
     where: { id: Number(userId) },
     data: {
       clinics: { set: clinicIdNumbers.map(id => ({ id })) },
@@ -176,3 +176,4 @@ module.exports = {
   createUser,
   updateUserClinics,
 };
+

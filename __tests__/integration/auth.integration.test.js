@@ -1,15 +1,10 @@
-// Mock completo del módulo prisma ANTES de cualquier importación
-// El service accede a prisma.users.count, prisma.users.findFirst, prisma.clinics.findMany,
-// y dentro de prisma.$transaction(async (tx) => ...) a tx.organization.create y tx.clinics.upsert.
-// Truco: mockeamos $transaction como jest.fn() que ignora la callback y devuelve
-// el resultado hardcodeado. Eso evita tener que mockear el `tx` por dentro.
 jest.mock("../../src/lib/prisma", () => {
   const txResult = {
     org: { id: 1, name: "testuser's Organization" },
     clinics: [{ id: 1, name: "Clinica 1", organizationId: 1 }],
   };
   const handler = {
-    users: {
+    user: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -20,7 +15,7 @@ jest.mock("../../src/lib/prisma", () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
-    clinics: {
+    clinic: {
       findMany: jest.fn(),
       create: jest.fn(),
       upsert: jest.fn(),
@@ -107,11 +102,11 @@ describe("Auth Integration Tests", () => {
         clinics: [mockClinic],
       };
 
-      mockPrisma.users.count.mockResolvedValue(0);
-      mockPrisma.users.findFirst.mockResolvedValue(null);
-      mockPrisma.clinics.findMany.mockResolvedValue([]);
+      mockPrisma.user.count.mockResolvedValue(0);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.clinic.findMany.mockResolvedValue([]);
       mockPrisma.organization.create.mockResolvedValue(mockOrganization);
-      mockPrisma.clinics.upsert.mockResolvedValue(mockClinic);
+      mockPrisma.clinic.upsert.mockResolvedValue(mockClinic);
       mockHashPassword.mockResolvedValue("hashedPassword");
       mockUserRepository.createUser.mockResolvedValue(mockUser);
 
@@ -141,10 +136,10 @@ describe("Auth Integration Tests", () => {
     });
 
     it("debería devolver error 400 si el usuario ya existe", async () => {
-      // Arrange
+      // Arrange: bootstrap pero el email/username ya están tomados
       const existingUser = createTestUser(1);
-      mockPrisma.users.count.mockResolvedValue(0);
-      mockPrisma.users.findFirst.mockResolvedValue(existingUser);
+      mockPrisma.user.count.mockResolvedValue(0);
+      mockPrisma.user.findFirst.mockResolvedValue(existingUser);
 
       // Act
       const response = await request(app)

@@ -1,4 +1,4 @@
-﻿const { prisma } = require('../../lib/prisma');
+const { prisma } = require('../../lib/prisma');
 const { ROLES } = require('../../core/constants/roles');
 
 const findUserByEmail = async (email, clinicId = undefined) => {
@@ -6,7 +6,7 @@ const findUserByEmail = async (email, clinicId = undefined) => {
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.users.findFirst({
+  return await prisma.user.findFirst({
     where,
     select: {
       id: true,
@@ -25,7 +25,7 @@ const findUserById = async (id, clinicId) => {
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.users.findFirst({
+  return await prisma.user.findFirst({
     where,
     select: {
       id: true,
@@ -46,7 +46,7 @@ const findUserByEmailOrUsername = async (email, username, clinicId) => {
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.users.findFirst({
+  return await prisma.user.findFirst({
     where,
     select: {
       id: true,
@@ -71,7 +71,7 @@ const createUser = async (username, email, hashedPassword, organizationId, role 
   if (clinicIds.length > 0) {
     data.clinics = { connect: clinicIds.map((id) => ({ id })) };
   }
-  return await prisma.users.create({
+  return await prisma.user.create({
     data,
     select: {
       id: true,
@@ -86,7 +86,7 @@ const createUser = async (username, email, hashedPassword, organizationId, role 
 };
 
 const updatePassword = async (id, hashedPassword, passwordChangedAt = new Date()) => {
-  return await prisma.users.update({
+  return await prisma.user.update({
     where: { id },
     data: {
       password: hashedPassword,
@@ -109,7 +109,7 @@ const getAllUsers = async (clinicId) => {
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.users.findMany({
+  return await prisma.user.findMany({
     where,
     select: {
       id: true,
@@ -131,4 +131,3 @@ module.exports = {
   updatePassword,
   getAllUsers
 };
-

@@ -1,11 +1,11 @@
-﻿const { prisma } = require('../../lib/prisma');
+const { prisma } = require('../../lib/prisma');
 
 const findUserById = async (id, clinicId) => {
   const where = { id };
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.users.findFirst({
+  return await prisma.user.findFirst({
     where,
     select: {
       id: true,
@@ -27,7 +27,7 @@ const getAllUsers = async (clinicId, organizationId) => {
   if (organizationId !== undefined && organizationId !== null) {
     where.organizationId = Number(organizationId);
   }
-  return await prisma.users.findMany({
+  return await prisma.user.findMany({
     where,
     select: {
       id: true,
@@ -45,3 +45,4 @@ module.exports = {
   findUserById,
   getAllUsers
 };
+

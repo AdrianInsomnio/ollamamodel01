@@ -1,7 +1,7 @@
-﻿const { prisma } = require('../../lib/prisma');
+const { prisma } = require('../../lib/prisma');
 
 const create = async (data, clinicId) => {
-  return await prisma.products.create({
+  return await prisma.product.create({
     data: {
       ...data,
       clinicId
@@ -25,7 +25,7 @@ const findAll = async (clinicId, options = {}) => {
     where.categoryId = parseInt(categoryId);
   }
 
-  return await prisma.products.findMany({
+  return await prisma.product.findMany({
     where,
     include: {
       category: true
@@ -35,7 +35,7 @@ const findAll = async (clinicId, options = {}) => {
 };
 
 const findById = async (id, clinicId) => {
-  return await prisma.products.findFirst({
+  return await prisma.product.findFirst({
     where: { id, clinicId },
     include: {
       category: true,
@@ -48,7 +48,7 @@ const findById = async (id, clinicId) => {
 };
 
 const findByIds = async (ids, clinicId) => {
-  return await prisma.products.findMany({
+  return await prisma.product.findMany({
     where: {
       id: { in: ids },
       clinicId
@@ -57,7 +57,7 @@ const findByIds = async (ids, clinicId) => {
 };
 
 const update = async (id, clinicId, data) => {
-  return await prisma.products.update({
+  return await prisma.product.update({
     where: { id, clinicId },
     data,
     include: {
@@ -67,13 +67,13 @@ const update = async (id, clinicId, data) => {
 };
 
 const remove = async (id, clinicId) => {
-  return await prisma.products.delete({
+  return await prisma.product.delete({
     where: { id, clinicId }
   });
 };
 
 const updateStock = async (id, quantityChange, clinicId) => {
-  return await prisma.products.update({
+  return await prisma.product.update({
     where: { id, clinicId },
     data: {
       stock: {
@@ -84,11 +84,11 @@ const updateStock = async (id, quantityChange, clinicId) => {
 };
 
 const getLowStockProducts = async (clinicId) => {
-  return await prisma.products.findMany({
+  return await prisma.product.findMany({
     where: {
       clinicId,
       stock: {
-        lte: prisma.products.fields.minStock
+        lte: prisma.product.fields.minStock
       },
       isActive: true
     },
@@ -114,7 +114,7 @@ const createStockMovement = async (data) => {
 };
 
 const getProductsByCategory = async (category, clinicId) => {
-  return await prisma.products.findMany({
+  return await prisma.product.findMany({
     where: {
       category,
       clinicId,
@@ -137,5 +137,6 @@ module.exports = {
   createStockMovement,
   getProductsByCategory
 };
+
 
 

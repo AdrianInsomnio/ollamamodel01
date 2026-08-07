@@ -1,9 +1,9 @@
 const mockPrisma = {
-  users: {
+  user: {
     findFirst: jest.fn(),
     count: jest.fn(),
   },
-  clinics: {
+  clinic: {
     findMany: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -75,8 +75,8 @@ describe('Auth Service', () => {
         clinics: [mockClinic],
       };
 
-      mockPrisma.users.findFirst.mockResolvedValue(null);
-      mockPrisma.clinics.findMany.mockResolvedValue([mockClinic]);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.clinic.findMany.mockResolvedValue([mockClinic]);
       mockUtils.hashPassword.mockResolvedValue('hashedPassword');
       mockAuthRepository.createUser.mockResolvedValue(mockUser);
 
@@ -85,12 +85,12 @@ describe('Auth Service', () => {
         actor: { id: 99, role: ROLES.SUPER_ADMIN }
       });
 
-      expect(mockPrisma.users.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: {
           OR: [{ email: validUserData.email }, { username: validUserData.username }]
         }
       });
-      expect(mockPrisma.clinics.findMany).toHaveBeenCalledWith({
+      expect(mockPrisma.clinic.findMany).toHaveBeenCalledWith({
         where: { id: { in: [mockClinic.id] } },
         select: { id: true, name: true, organizationId: true }
       });
@@ -117,8 +117,8 @@ describe('Auth Service', () => {
       const clinicOne = { id: 2, name: 'Clinic A', organizationId: 1 };
       const clinicTwo = { id: 3, name: 'Clinic B', organizationId: 2 };
 
-      mockPrisma.users.findFirst.mockResolvedValue(null);
-      mockPrisma.clinics.findMany.mockResolvedValue([clinicOne, clinicTwo]);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.clinic.findMany.mockResolvedValue([clinicOne, clinicTwo]);
 
       await expect(authService.register({
         ...validUserData,
@@ -149,7 +149,7 @@ describe('Auth Service', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       const tx = {
-        users: {
+        user: {
           count: jest.fn().mockResolvedValue(0),
           create: jest.fn().mockResolvedValue({
             id: 99,
@@ -163,7 +163,7 @@ describe('Auth Service', () => {
         organization: {
           create: jest.fn().mockResolvedValue({ id: 1, name: 'Clinic Org' }),
         },
-        clinics: {
+        clinic: {
           create: jest.fn().mockResolvedValue({ id: 10, name: 'Main Clinic', organizationId: 1 }),
         },
       };
@@ -180,15 +180,15 @@ describe('Auth Service', () => {
         bootstrapToken: 'bootstrap-secret-token',
       });
 
-      expect(tx.users.count).toHaveBeenCalled();
+      expect(tx.user.count).toHaveBeenCalled();
       expect(tx.organization.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ name: 'Clinic Org' })
       }));
-      expect(tx.users.count).toHaveBeenCalled();
-      expect(tx.clinics.create).toHaveBeenCalledWith(expect.objectContaining({
+      expect(tx.user.count).toHaveBeenCalled();
+      expect(tx.clinic.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ name: 'Main Clinic', organizationId: 1, isDefault: true })
       }));
-      expect(tx.users.create).toHaveBeenCalledWith(expect.objectContaining({
+      expect(tx.user.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({
           username: 'root',
           email: 'root@example.com',
@@ -203,7 +203,7 @@ describe('Auth Service', () => {
 
     it('should reject bootstrap when users already exist', async () => {
       mockPrisma.$transaction.mockImplementation(async (callback) => callback({
-        users: {
+        user: {
           count: jest.fn().mockResolvedValue(1),
         },
       }));
@@ -383,3 +383,6 @@ describe('Auth Service', () => {
     });
   });
 });
+
+
+

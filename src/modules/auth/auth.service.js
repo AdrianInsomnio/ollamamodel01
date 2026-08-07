@@ -28,7 +28,7 @@ const register = async ({ username, email, password, role = ROLES.USER, clinicId
   // Determinar modo: bootstrap (sin actor + tabla vacia) o con actor
   let isBootstrap = false;
   if (!actor) {
-    const userCount = await prisma.users.count();
+    const userCount = await prisma.user.count();
     if (userCount === 0) {
       isBootstrap = true;
       role = ROLES.SUPER_ADMIN;
@@ -39,7 +39,7 @@ const register = async ({ username, email, password, role = ROLES.USER, clinicId
     throw new AppError('Only SUPER_ADMIN or ADMIN can create users', 403);
   }
 
-  const existingUser = await prisma.users.findFirst({
+  const existingUser = await prisma.user.findFirst({
     where: {
       OR: [{ email }, { username }]
     }
@@ -54,7 +54,7 @@ const register = async ({ username, email, password, role = ROLES.USER, clinicId
   }
 
   // Buscar clinics existentes
-  let clinics = await prisma.clinics.findMany({
+  let clinics = await prisma.clinic.findMany({
     where: { id: { in: uniqueClinicIds } },
     select: { id: true, name: true, organizationId: true }
   });
@@ -165,7 +165,7 @@ const bootstrapSuperAdmin = async ({
   const now = new Date();
 
   const result = await prisma.$transaction(async (tx) => {
-    const existingUsers = await tx.users.count();
+    const existingUsers = await tx.user.count();
     if (existingUsers > 0) {
       throw new AppError('Bootstrap is only allowed when no users exist', 409, 'BOOTSTRAP_ALREADY_USED');
     }
@@ -183,7 +183,7 @@ const bootstrapSuperAdmin = async ({
       }
     });
 
-    const clinic = await tx.clinics.create({
+    const clinic = await tx.clinic.create({
       data: {
         name: clinicName,
         organizationId: organization.id,
@@ -198,7 +198,7 @@ const bootstrapSuperAdmin = async ({
       }
     });
 
-    const user = await tx.users.create({
+    const user = await tx.user.create({
       data: {
         username,
         email,
@@ -285,3 +285,4 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
 };
 
 module.exports = { register, bootstrapSuperAdmin, login, changePassword };
+
