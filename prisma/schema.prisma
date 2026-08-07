@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -7,334 +8,311 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//////////////////////
-// ORGANIZATIONS //
-//////////////////////
-
-model Organization {
-  id        Int      @id @default(autoincrement())
-  name      String
-  address   String?
-  phone     String?
-  email     String?
-  taxId     String? // RUT, CI, etc.
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-clinics       Clinic[]
-  users         User[]
-  refreshTokens RefreshToken[]
-  clients       Client[]
-  pets          Pet[]
-  sales         Sale[]
-  appointments  Appointment[]
-  consultations Consultation[]
-  products      Product[]
-  services      Service[]
-  plans         Plan[]
-  subscriptions Subscription[]
-}
-
-
-
-//////////////////////
-//  CLINICS //
-//////////////////////
-
-model Clinic {
-  id            Int      @id @default(autoincrement())
-  name          String
-  rut           String?  @unique
-  website       String?
-  imageUrl      String? 
-  imagePublicId  String?
-  imageVersion   String?
-  address       String?
-  phone         String?
-  email         String?
-  isDefault     Boolean  @default(false)
-  organization  Organization @relation(fields: [organizationId], references: [id])
+model appointment {
+  id             Int           @id @default(autoincrement())
+  date           DateTime
+  duration       Int           @default(30)
+  status         String        @default("pending")
+  serviceType    String?
+  notes          String?
+  clientId       Int
+  petId          Int
   organizationId Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@map("clinics")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  client         client        @relation(fields: [clientId], references: [id], map: "Appointment_clientId_fkey")
+  organization   organization  @relation(fields: [organizationId], references: [id], map: "Appointment_organizationId_fkey")
+  pet            pet           @relation(fields: [petId], references: [id], map: "Appointment_petId_fkey")
+  consultation   consultation?
+
+  @@index([clientId], map: "Appointment_clientId_fkey")
+  @@index([petId], map: "Appointment_petId_fkey")
+  @@index([organizationId], map: "Appointment_organizationId_fkey")
 }
 
-
-//////////////////////
-// USERS & AUTH  //
-//////////////////////
-
-model User {
-  id             Int       @id @default(autoincrement())
-  username       String    @unique @db.VarChar(50)
-  email          String    @unique @db.VarChar(100)
-  password       String    @db.VarChar(255)
-  role           String    @default("USER") // ADMIN, VET, USER, SUPER_ADMIN
-  isActive       Boolean   @default(true)
-  lastLogin      DateTime?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  organizationId Int
-
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  refreshTokens RefreshToken[]
-
-  @@map("users")
+model attachment {
+  id         Int      @id @default(autoincrement())
+  entityType String
+  entityId   Int
+  fileUrl    String
+  createdAt  DateTime @default(now())
 }
 
-model RefreshToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @db.Text
-  userId    Int      @map("user_id")
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  role           String
-  organizationId Int
-  organization   Organization @relation(fields: [organizationId], references: [id])
-
-  @@map("refresh_tokens")
-}
-
-//////////////////////
-//  CLIENTS       //
-//////////////////////
-
-model Client {
-  id             Int       @id @default(autoincrement())
+model client {
+  id             Int              @id @default(autoincrement())
   name           String
-  documentId     String?   @unique // CI, RUT, etc.
+  documentId     String?          @unique(map: "Client_documentId_key")
   phone          String?
-  phone2         String? // telÃƒÂ©fono secundario
+  phone2         String?
   email          String?
   address        String?
   birthDate      DateTime?
   notes          String?
-  isActive       Boolean   @default(true)
+  isActive       Boolean          @default(true)
   organizationId Int
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  appointment    appointment[]
+  organization   organization     @relation(fields: [organizationId], references: [id], map: "Client_organizationId_fkey")
+  consultation   consultation[]
+  fiscaldocument fiscaldocument[]
+  pet            pet[]
+  sale           sale[]
 
-  organization    Organization     @relation(fields: [organizationId], references: [id])
-  pets            Pet[]
-  sales           Sale[]
-  appointments    Appointment[]
-  consultations   Consultation[]
-  fiscalDocuments FiscalDocument[]
+  @@index([organizationId], map: "Client_organizationId_fkey")
 }
 
-//////////////////////
-//  PETS          //
-//////////////////////
-
-model Pet {
-  id             Int       @id @default(autoincrement())
+model clinics {
+  id             Int          @id @default(autoincrement())
   name           String
-  species        String
-  breed          String?
-  birthDate      DateTime?
-  weight         Float? // en kg
-  color          String?
-  microchip      String?   @unique
-  isActive       Boolean   @default(true)
-  notes          String?
-  clientId       Int
+  address        String?
+  phone          String?
+  email          String?
+  timezone       String       @default("America/Montevideo")
+  isActive       Boolean      @default(true)
+  isDefault      Boolean      @default(false)
   organizationId Int
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  organization   organization @relation(fields: [organizationId], references: [id])
 
-  client        Client         @relation(fields: [clientId], references: [id])
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  consultations Consultation[]
-  appointments  Appointment[]
-  sales         Sale[]
+  @@index([organizationId])
 }
 
-//////////////////////
-//  APPOINTMENTS  //
-//////////////////////
+model consultation {
+  id              Int              @id @default(autoincrement())
+  petId           Int
+  clientId        Int
+  appointmentId   Int?             @unique(map: "Consultation_appointmentId_key")
+  organizationId  Int
+  weight          Float?
+  temperature     Float?
+  symptoms        String?
+  diagnosis       String?
+  treatment       String?
+  notes           String?
+  consultationFee Float            @default(0)
+  treatmentFee    Float            @default(0)
+  totalFee        Float            @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime
+  appointment     appointment?     @relation(fields: [appointmentId], references: [id], map: "Consultation_appointmentId_fkey")
+  client          client           @relation(fields: [clientId], references: [id], map: "Consultation_clientId_fkey")
+  organization    organization     @relation(fields: [organizationId], references: [id], map: "Consultation_organizationId_fkey")
+  pet             pet              @relation(fields: [petId], references: [id], map: "Consultation_petId_fkey")
+  diagnoses       diagnosis[]
+  fiscaldocuments  fiscaldocument[]
+  prescriptions    prescription[]
+  sales            sale[]
+  treatments       treatment[]
 
-model Appointment {
-  id             Int      @id @default(autoincrement())
-  date           DateTime
-  duration       Int      @default(30) // duraciÃƒÂ³n en minutos
-  status         String   @default("pending") // pending, confirmed, completed, cancelled
-  serviceType    String? // consulta, grooming, vacunaciÃƒÂ³n, etc.
-  notes          String?
-  clientId       Int
-  petId          Int
-  organizationId Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  client       Client        @relation(fields: [clientId], references: [id])
-  pet          Pet           @relation(fields: [petId], references: [id])
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  consultation Consultation?
+  @@index([clientId], map: "Consultation_clientId_fkey")
+  @@index([petId], map: "Consultation_petId_fkey")
+  @@index([organizationId], map: "Consultation_organizationId_fkey")
 }
 
-//////////////////////
-//  CLINICAL      //
-//////////////////////
-
-model Consultation {
-  id             Int  @id @default(autoincrement())
-  petId          Int
-  clientId       Int
-  appointmentId  Int? @unique
-  organizationId Int
-
-  // Datos clÃƒÂ­nicos
-  weight      Float? // peso en kg
-  temperature Float? // temperatura en Ã‚Â°C
-  symptoms    String? // sÃƒÂ­ntomas presentados
-  diagnosis   String? // diagnÃƒÂ³stico principal
-  treatment   String? // tratamiento aplicado
-  notes       String? // notas adicionales
-
-  // Costos
-  consultationFee Float @default(0)
-  treatmentFee    Float @default(0)
-  totalFee        Float @default(0)
-
-  // Estado del MVP
-  status    String    @default("OPEN") // OPEN, CLOSED
-  closedAt  DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  pet          Pet          @relation(fields: [petId], references: [id])
-  client       Client       @relation(fields: [clientId], references: [id])
-  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  diagnoses       Diagnosis[]
-  treatments      Treatment[]
-  prescriptions   Prescription[]
-  sales           Sale[]
-  fiscalDocuments FiscalDocument[]
-}
-
-model Diagnosis {
-  id             Int    @id @default(autoincrement())
+model diagnosis {
+  id             Int          @id @default(autoincrement())
   consultationId Int
   description    String
+  consultation   consultation @relation(fields: [consultationId], references: [id], map: "Diagnosis_consultationId_fkey")
 
-  consultation Consultation @relation(fields: [consultationId], references: [id])
+  @@index([consultationId], map: "Diagnosis_consultationId_fkey")
 }
 
-model Treatment {
-  id             Int    @id @default(autoincrement())
+model fiscaldocument {
+  id             String                @id
+  type           fiscaldocument_type
+  series         String?
+  number         Int?
+  issuedAt       DateTime              @default(now())
+  clientId       Int
+  consultationId Int?
+  subtotal       Decimal
+  tax            Decimal
+  total          Decimal
+  currency       String                @default("UYU")
+  cae            String?
+  caeExpiration  DateTime?
+  cfeXml         String?
+  cfePdfUrl      String?
+  status         fiscaldocument_status @default(PENDING)
+  createdAt      DateTime              @default(now())
+  client         client                @relation(fields: [clientId], references: [id], map: "FiscalDocument_clientId_fkey")
+  consultation   consultation?         @relation(fields: [consultationId], references: [id], map: "FiscalDocument_consultationId_fkey")
+  fiscalitem     fiscalitem[]
+  payment        payment[]
+
+  @@index([clientId], map: "FiscalDocument_clientId_fkey")
+  @@index([consultationId], map: "FiscalDocument_consultationId_fkey")
+}
+
+model fiscalitem {
+  id               String         @id
+  fiscalDocumentId String
+  description      String
+  quantity         Decimal
+  unitPrice        Decimal
+  taxRate          Decimal
+  total            Decimal
+  fiscaldocument   fiscaldocument @relation(fields: [fiscalDocumentId], references: [id], map: "FiscalItem_fiscalDocumentId_fkey")
+
+  @@index([fiscalDocumentId], map: "FiscalItem_fiscalDocumentId_fkey")
+}
+
+model idempotencykey {
+  id         Int      @id @default(autoincrement())
+  key        String
+  endpoint   String
+  response   Json?
+  statusCode Int?
+  createdAt  DateTime @default(now())
+
+  @@unique([key, endpoint], map: "IdempotencyKey_key_endpoint_key")
+}
+
+model organization {
+  id             Int              @id @default(autoincrement())
+  name           String
+  address        String?
+  phone          String?
+  email          String?
+  taxId          String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  appointment    appointment[]
+  client         client[]
+  clinics        clinics[]
+  consultation   consultation[]
+  pet            pet[]
+  products       products[]
+  refresh_tokens refresh_tokens[]
+  sale           sale[]
+  services       services[]
+  users          users[]
+}
+
+model payment {
+  id               String         @id
+  fiscalDocumentId String
+  amount           Decimal
+  method           payment_method
+  reference        String?
+  notes            String?
+  paidAt           DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  fiscaldocument   fiscaldocument @relation(fields: [fiscalDocumentId], references: [id], map: "Payment_fiscalDocumentId_fkey")
+
+  @@index([fiscalDocumentId], map: "Payment_fiscalDocumentId_fkey")
+}
+
+model pet {
+  id                 Int            @id @default(autoincrement())
+  name               String
+  species            String
+  breed              String?
+  birthDate          DateTime?
+  weight             Float?
+  color              String?
+  microchip          String?        @unique(map: "Pet_microchip_key")
+  isActive           Boolean        @default(true)
+  notes              String?
+  clientId           Int
+  organizationId     Int
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime
+  birthDateEstimated Boolean?       @default(false)
+  deathDate          DateTime?
+  appointment        appointment[]
+  consultation       consultation[]
+  client             client         @relation(fields: [clientId], references: [id], map: "Pet_clientId_fkey")
+  organization       organization   @relation(fields: [organizationId], references: [id], map: "Pet_organizationId_fkey")
+  sale               sale[]
+
+  @@index([clientId], map: "Pet_clientId_fkey")
+  @@index([organizationId], map: "Pet_organizationId_fkey")
+}
+
+model prescription {
+  id             Int          @id @default(autoincrement())
   consultationId Int
   description    String
+  consultation   consultation @relation(fields: [consultationId], references: [id], map: "Prescription_consultationId_fkey")
 
-  consultation Consultation @relation(fields: [consultationId], references: [id])
+  @@index([consultationId], map: "Prescription_consultationId_fkey")
 }
 
-model Prescription {
-  id             Int    @id @default(autoincrement())
-  consultationId Int
-  description    String
-
-  consultation Consultation @relation(fields: [consultationId], references: [id])
+model product_categories {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 }
 
-//////////////////////
-//  CATALOG       //
-//////////////////////
-
-model Product {
-  id             Int      @id @default(autoincrement())
+model products {
+  id             Int             @id @default(autoincrement())
   name           String
   description    String?
-  sku            String?  @unique // cÃƒÂ³digo ÃƒÂºnico de producto
-  categoryId     Int?     @map("category_id")
+  category       String?
   price          Float
-  cost           Float? // costo de compra
-  stock          Int      @default(0)
-  minStock       Int      @default(5) // stock mÃƒÂ­nimo para alertas
-  isActive       Boolean  @default(true)
-  discontinuedAt DateTime? // fecha de discontinuaciÃƒÂ³n
+  cost           Float?
+  stock          Int             @default(0)
+  minStock       Int             @default(5)
+  isActive       Boolean         @default(true)
   organizationId Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime
+  organization   organization    @relation(fields: [organizationId], references: [id])
+  stockmovement  stockmovement[]
 
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  category       ProductCategory? @relation(fields: [categoryId], references: [id])
-  stockMovements StockMovement[]
-
-  @@map("products")
+  @@index([organizationId], map: "products_organizationId_fkey")
 }
 
-model ProductCategory {
-  id             Int      @id @default(autoincrement())
-  name           String
-  description    String?
-  isActive       Boolean  @default(true)
-  organizationId Int      @default(1)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  products Product[]
-
-  @@map("product_categories")
-}
-
-model Service {
-  id             Int      @id @default(autoincrement())
-  name           String
-  description    String?
-  price          Float
-  duration       Int? // duraciÃƒÂ³n estimada en minutos
-  category       String? // consulta, grooming, vacunaciÃƒÂ³n, etc.
-  isActive       Boolean  @default(true)
+model refresh_tokens {
+  id             Int          @id @default(autoincrement())
+  token          String       @db.Text
+  user_id        Int
+  expires_at     DateTime
+  created_at     DateTime     @default(now())
+  role           String
   organizationId Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  organization   organization @relation(fields: [organizationId], references: [id])
+  users          users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@map("services")
+  @@index([user_id], map: "refresh_tokens_user_id_fkey")
+  @@index([organizationId], map: "refresh_tokens_organizationId_fkey")
 }
 
-//////////////////////
-//  SALES         //
-//////////////////////
-
-model Sale {
-  id             Int  @id @default(autoincrement())
+model sale {
+  id             Int           @id @default(autoincrement())
   clientId       Int
   petId          Int?
   consultationId Int?
   organizationId Int
+  subtotal       Float         @default(0)
+  discount       Float         @default(0)
+  tax            Float         @default(0)
+  total          Float         @default(0)
+  status         String        @default("completed")
+  paymentMethod  String?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  client         client        @relation(fields: [clientId], references: [id], map: "Sale_clientId_fkey")
+  consultation   consultation? @relation(fields: [consultationId], references: [id], map: "Sale_consultationId_fkey")
+  organization   organization  @relation(fields: [organizationId], references: [id], map: "Sale_organizationId_fkey")
+  pet            pet?          @relation(fields: [petId], references: [id], map: "Sale_petId_fkey")
+  saleitem       saleitem[]
 
-  // Montos
-  subtotal Float @default(0) // suma de items sin impuestos
-  discount Float @default(0) // descuento aplicado
-  tax      Float @default(0) // IVA (14% en Uruguay)
-  total    Float @default(0) // total final
-
-  // Estado y mÃƒÂ©todo de pago
-  status        String  @default("completed") // pending, completed, cancelled
-  paymentMethod String? // cash, card, transfer, etc.
-
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  client       Client        @relation(fields: [clientId], references: [id])
-  pet          Pet?          @relation(fields: [petId], references: [id])
-  consultation Consultation? @relation(fields: [consultationId], references: [id])
-  organization Organization  @relation(fields: [organizationId], references: [id])
-
-  items SaleItem[]
+  @@index([clientId], map: "Sale_clientId_fkey")
+  @@index([consultationId], map: "Sale_consultationId_fkey")
+  @@index([petId], map: "Sale_petId_fkey")
+  @@index([organizationId], map: "Sale_organizationId_fkey")
 }
 
-model SaleItem {
+model saleitem {
   id            Int    @id @default(autoincrement())
   saleId        Int
   itemType      String
@@ -343,174 +321,86 @@ model SaleItem {
   priceSnapshot Float
   quantity      Int
   subtotal      Float
+  sale          sale   @relation(fields: [saleId], references: [id], map: "SaleItem_saleId_fkey")
 
-  sale Sale @relation(fields: [saleId], references: [id])
+  @@index([saleId], map: "SaleItem_saleId_fkey")
 }
 
-//////////////////////
-//  INVENTORY     //
-//////////////////////
+model services {
+  id             Int          @id @default(autoincrement())
+  name           String
+  description    String?
+  price          Float
+  duration       Int?
+  category       String?
+  isActive       Boolean      @default(true)
+  organizationId Int
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime
+  organization   organization @relation(fields: [organizationId], references: [id])
 
-model StockMovement {
+  @@index([organizationId], map: "services_organizationId_fkey")
+}
+
+model stockmovement {
   id            Int      @id @default(autoincrement())
   productId     Int
-  type          String // 'in' (entrada), 'out' (salida), 'adjustment' (ajuste)
-  quantity      Int // cantidad (positiva para entrada, negativa para salida)
-  reason        String? // motivo del movimiento
-  referenceType String? // 'sale', 'purchase', 'adjustment', etc.
-  referenceId   Int? // ID de la venta, compra, etc.
+  type          String
+  quantity      Int
+  reason        String?
+  referenceType String?
+  referenceId   Int?
   notes         String?
   createdAt     DateTime @default(now())
+  products      products @relation(fields: [productId], references: [id], map: "StockMovement_productId_fkey")
 
-  product Product @relation(fields: [productId], references: [id])
+  @@index([productId], map: "StockMovement_productId_fkey")
 }
 
+model treatment {
+  id             Int          @id @default(autoincrement())
+  consultationId Int
+  description    String
+  consultation   consultation @relation(fields: [consultationId], references: [id], map: "Treatment_consultationId_fkey")
 
-//////////////////////
-// Ã°Å¸â€œÅ½ ATTACHMENTS   //
-//////////////////////
-
-model Attachment {
-  id         Int      @id @default(autoincrement())
-  entityType String
-  entityId   Int
-  fileUrl    String
-  createdAt  DateTime @default(now())
+  @@index([consultationId], map: "Treatment_consultationId_fkey")
 }
 
-//////////////////////
-// IDEMPOTENCY   //
-//////////////////////
+model users {
+  id             Int              @id @default(autoincrement())
+  username       String           @unique @db.VarChar(50)
+  email          String           @unique @db.VarChar(100)
+  password       String           @db.VarChar(255)
+  role           String           @default("user")
+  isActive       Boolean          @default(true)
+  lastLogin      DateTime?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime
+  organizationId Int
+  refresh_tokens refresh_tokens[]
+  organization   organization     @relation(fields: [organizationId], references: [id])
 
-model IdempotencyKey {
-  id         Int      @id @default(autoincrement())
-  key        String
-  endpoint   String
-  response   Json?
-  statusCode Int?
-  createdAt  DateTime @default(now())
-
-  @@unique([key, endpoint])
+  @@index([organizationId], map: "users_organizationId_fkey")
 }
 
-//////////////////////
-//  FISCAL DOCUMENTS //
-//////////////////////
-
-enum PaymentMethod {
-  CASH
-  DEBIT_CARD
-  CREDIT_CARD
-  BANK_TRANSFER
-  MERCADO_PAGO
-  ACCOUNT_CREDIT // fiado / cuenta corriente
-}
-
-enum FiscalDocumentType {
+enum fiscaldocument_type {
   E_TICKET
   E_FACTURA
   E_TICKET_NOTA_CREDITO
 }
 
-enum FiscalStatus {
+enum payment_method {
+  CASH
+  DEBIT_CARD
+  CREDIT_CARD
+  BANK_TRANSFER
+  MERCADO_PAGO
+  ACCOUNT_CREDIT
+}
+
+enum fiscaldocument_status {
   PENDING
   ACCEPTED
   REJECTED
 }
-
-model FiscalDocument {
-  id       String             @id @default(cuid())
-  type     FiscalDocumentType
-  series   String?
-  number   Int?
-  issuedAt DateTime           @default(now())
-
-  clientId Int
-  client   Client @relation(fields: [clientId], references: [id])
-
-  consultationId Int?
-  consultation   Consultation? @relation(fields: [consultationId], references: [id])
-
-  subtotal Decimal
-  tax      Decimal
-  total    Decimal
-  currency String  @default("UYU")
-
-  cae           String?
-  caeExpiration DateTime?
-  cfeXml        String?
-  cfePdfUrl     String?
-
-  status FiscalStatus @default(PENDING)
-
-  items    FiscalItem[]
-  payments Payment[]
-
-  createdAt DateTime @default(now())
-}
-
-model FiscalItem {
-  id               String         @id @default(cuid())
-  fiscalDocumentId String
-  fiscalDocument   FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
-
-  description String
-  quantity    Decimal
-  unitPrice   Decimal
-  taxRate     Decimal
-  total       Decimal
-}
-
-model Payment {
-  id String @id @default(cuid())
-
-  fiscalDocumentId String
-  fiscalDocument   FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
-
-  amount Decimal
-  method PaymentMethod
-
-  reference String? // nro voucher, transferencia, etc
-  notes     String?
-
-  paidAt DateTime @default(now())
-
-  createdAt DateTime @default(now())
-}
-
-// SUPER ADMIN MODELS
-model Plan {
-  id            Int      @id @default(autoincrement())
-  name          String
-  description   String?
-  price         Float
-  interval      String
-  features      Json
-  isActive      Boolean  @default(true)
-  organizationId Int
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  subscriptions Subscription[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@map("plans")
-}
-
-
-model Subscription {
-  id            Int      @id @default(autoincrement())
-  planId        Int
-  plan          Plan     @relation(fields: [planId], references: [id])
-  organizationId Int
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  startDate     DateTime
-  endDate       DateTime?
-  isActive      Boolean  @default(true)
-  paymentMethod String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("subscriptions")
-}
-
-
 
