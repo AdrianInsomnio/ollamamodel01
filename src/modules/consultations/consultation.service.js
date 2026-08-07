@@ -16,14 +16,14 @@ const validateMedicalData = (data) => {
   }
 };
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   // Validar campos requeridos
   if (!data.petId || !data.clientId) {
     throw new AppError('Pet and client are required', 400);
   }
 
   // Validar que la mascota existe
-  const pet = await petRepository.findById(data.petId, organizationId);
+  const pet = await petRepository.findById(data.petId);
   if (!pet) {
     throw new AppError('Pet not found', 404);
   }
@@ -34,7 +34,7 @@ const create = async (data, organizationId) => {
   }
 
   // Validar que el cliente existe
-  const client = await clientRepository.findById(data.clientId, organizationId);
+  const client = await clientRepository.findById(data.clientId, clinicId);
   if (!client) {
     throw new AppError('Client not found', 404);
   }
@@ -44,7 +44,7 @@ const create = async (data, organizationId) => {
 
   // Si hay una cita asociada, validarla
   if (data.appointmentId) {
-    const appointment = await appointmentRepository.findById(data.appointmentId, organizationId);
+    const appointment = await appointmentRepository.findById(data.appointmentId, clinicId);
     if (!appointment) {
       throw new AppError('Appointment not found', 404);
     }
@@ -57,23 +57,23 @@ const create = async (data, organizationId) => {
     data.totalFee = consultationFee + treatmentFee;
   }
 
-  return await repository.create(data, organizationId);
+  return await repository.create(data, clinicId);
 };
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
+const getAll = async (clinicId) => {
+  return await repository.findAll(clinicId);
 };
 
-const getById = async (id, organizationId) => {
-  const item = await repository.findById(id, organizationId);
+const getById = async (id, clinicId) => {
+  const item = await repository.findById(id, clinicId);
   if (!item) {
     throw new AppError('Consultation not found', 404);
   }
   return item;
 };
 
-const getPetHistory = async (petId, organizationId) => {
-  const consultations = await repository.findByPetId(petId, organizationId);
+const getPetHistory = async (petId, clinicId) => {
+  const consultations = await repository.findByPetId(petId, clinicId);
   if(!consultations || consultations.length === 0){
     throw new AppError('No consultations found for this pet', 404);
   }
@@ -86,12 +86,12 @@ const getPetHistory = async (petId, organizationId) => {
   };
 };
 
-const getClientConsultations = async (clientId, organizationId) => {
-  return await repository.findByClientId(clientId, organizationId);
+const getClientConsultations = async (clientId, clinicId) => {
+  return await repository.findByClientId(clientId, clinicId);
 };
 
-const addDiagnosis = async (consultationId, organizationId, diagnosis) => {
-  const consultation = await getById(consultationId, organizationId);
+const addDiagnosis = async (consultationId, clinicId, diagnosis) => {
+  const consultation = await getById(consultationId, clinicId);
 
   if (!diagnosis || diagnosis.trim() === '') {
     throw new AppError('Diagnosis description is required', 400);
@@ -100,8 +100,8 @@ const addDiagnosis = async (consultationId, organizationId, diagnosis) => {
   return await repository.addDiagnosis(consultationId, diagnosis);
 };
 
-const addTreatment = async (consultationId, organizationId, treatment) => {
-  const consultation = await getById(consultationId, organizationId);
+const addTreatment = async (consultationId, clinicId, treatment) => {
+  const consultation = await getById(consultationId, clinicId);
 
   if (!treatment || treatment.trim() === '') {
     throw new AppError('Treatment description is required', 400);
@@ -110,8 +110,8 @@ const addTreatment = async (consultationId, organizationId, treatment) => {
   return await repository.addTreatment(consultationId, treatment);
 };
 
-const addPrescription = async (consultationId, organizationId, prescription) => {
-  const consultation = await getById(consultationId, organizationId);
+const addPrescription = async (consultationId, clinicId, prescription) => {
+  const consultation = await getById(consultationId, clinicId);
 
   if (!prescription || prescription.trim() === '') {
     throw new AppError('Prescription description is required', 400);
@@ -132,8 +132,8 @@ const removePrescription = async (prescriptionId) => {
   return await repository.removePrescription(prescriptionId);
 };
 
-const update = async (id, organizationId, data) => {
-  const consultation = await getById(id, organizationId);
+const update = async (id, clinicId, data) => {
+  const consultation = await getById(id, clinicId);
 
   // Validar datos médicos si se actualizan
   validateMedicalData(data);
@@ -145,25 +145,25 @@ const update = async (id, organizationId, data) => {
     data.totalFee = consultationFee + treatmentFee;
   }
 
-  return await repository.update(id, organizationId, data);
+  return await repository.update(id, clinicId, data);
 };
 
-const remove = async (id, organizationId) => {
-  const consultation = await getById(id, organizationId);
+const remove = async (id, clinicId) => {
+  const consultation = await getById(id, clinicId);
 
   // Verificar si hay diagnósticos (restricción de negocio)
   if (consultation.diagnoses && consultation.diagnoses.length > 0) {
     throw new AppError('Cannot delete consultation with existing diagnoses', 409);
   }
 
-  return await repository.remove(id, organizationId);
+  return await repository.remove(id, clinicId);
 };
 
-const close = async (id, organizationId, closeData) => {
+const close = async (id, clinicId, closeData) => {
   const { items, paymentMethod, discount = 0 } = closeData;
 
   // Validar que la consulta existe
-  const consultation = await getById(id, organizationId);
+  const consultation = await getById(id, clinicId);
 
   // Validar que la consulta está abierta
   if (consultation.status !== 'OPEN') {
@@ -190,7 +190,7 @@ const close = async (id, organizationId, closeData) => {
     paymentMethod
   };
 
-  const sale = await saleService.createSale(saleData, organizationId);
+  const sale = await saleService.createSale(saleData, clinicId);
 
   // Cerrar la consulta
   const closedConsultation = await repository.updateStatus(id, 'CLOSED', new Date());

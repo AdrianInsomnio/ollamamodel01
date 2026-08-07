@@ -2,7 +2,7 @@ const service = require('./consultation.service');
 
 const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body, req.user.organizationId);
+    const item = await service.create(req.body, req.user.clinicId);
     res.status(201).json(item);
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ const create = async (req, res, next) => {
 
 const getAll = async (req, res, next) => {
   try {
-    const items = await service.getAll(req.user.organizationId);
+    const items = await service.getAll(req.user.clinicId);
     res.json({ consultations: items });
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
-    const item = await service.getById(parseInt(req.params.id), req.user.organizationId);
+    const item = await service.getById(parseInt(req.params.id), req.user.clinicId);
     res.json({ consultation: item });
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ const getById = async (req, res, next) => {
 
 const getPetHistory = async (req, res, next) => {
   try {
-    const result = await service.getPetHistory(parseInt(req.params.petId), req.user.organizationId);
+    const result = await service.getPetHistory(parseInt(req.params.petId), req.user.clinicId);
     res.json(result);
   } catch (error) {
     next(error);
@@ -38,7 +38,7 @@ const getPetHistory = async (req, res, next) => {
 
 const getClientConsultations = async (req, res, next) => {
   try {
-    const consultations = await service.getClientConsultations(parseInt(req.params.clientId), req.user.organizationId);
+    const consultations = await service.getClientConsultations(parseInt(req.params.clientId), req.user.clinicId);
     res.json({ consultations });
   } catch (error) {
     next(error);
@@ -47,7 +47,7 @@ const getClientConsultations = async (req, res, next) => {
 
 const addDiagnosis = async (req, res, next) => {
   try {
-    const item = await service.addDiagnosis(parseInt(req.params.id), req.user.organizationId, req.body.description);
+    const item = await service.addDiagnosis(parseInt(req.params.id), req.user.clinicId, req.body.description);
     res.status(201).json(item);
   } catch (error) {
     next(error);
@@ -56,7 +56,7 @@ const addDiagnosis = async (req, res, next) => {
 
 const addTreatment = async (req, res, next) => {
   try {
-    const item = await service.addTreatment(parseInt(req.params.id), req.user.organizationId, req.body.description);
+    const item = await service.addTreatment(parseInt(req.params.id), req.user.clinicId, req.body.description);
     res.status(201).json(item);
   } catch (error) {
     next(error);
@@ -65,7 +65,7 @@ const addTreatment = async (req, res, next) => {
 
 const addPrescription = async (req, res, next) => {
   try {
-    const item = await service.addPrescription(parseInt(req.params.id), req.user.organizationId, req.body.description);
+    const item = await service.addPrescription(parseInt(req.params.id), req.user.clinicId, req.body.description);
     res.status(201).json(item);
   } catch (error) {
     next(error);
@@ -74,7 +74,7 @@ const addPrescription = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const item = await service.update(parseInt(req.params.id), req.user.organizationId, req.body);
+    const item = await service.update(parseInt(req.params.id), req.user.clinicId, req.body);
     res.json({ consultation: item });
   } catch (error) {
     next(error);
@@ -83,7 +83,7 @@ const update = async (req, res, next) => {
 
 const close = async (req, res, next) => {
   try {
-    const result = await service.close(parseInt(req.params.id), req.user.organizationId, req.body);
+    const result = await service.close(parseInt(req.params.id), req.user.clinicId, req.body);
     res.json(result);
   } catch (error) {
     next(error);

@@ -1,6 +1,6 @@
 const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   return await prisma.prescription.create({
     data: {
       ...data,
@@ -18,20 +18,20 @@ const create = async (data, organizationId) => {
   });
 };
 
-const findByConsultationId = async (consultationId, organizationId) => {
+const findByConsultationId = async (consultationId, clinicId) => {
   return await prisma.prescription.findMany({
     where: {
       consultationId,
       consultation: {
-        organizationId
+        clinicId
       }
     }
   });
 };
 
-const remove = async (id, organizationId) => {
+const remove = async (id, clinicId) => {
   return await prisma.prescription.delete({
-    where: { id, organizationId }
+    where: { id, clinicId }
   });
 };
 

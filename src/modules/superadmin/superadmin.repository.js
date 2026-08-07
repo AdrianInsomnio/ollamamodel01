@@ -67,37 +67,37 @@ const getSubscriptionsByOrganization = async (organizationId) => {
 };
 
 const createClinic = async (data, organizationId) => {
-  return await prisma.clinic.create({
+  return await prisma.clinics.create({
     data: { ...data, organizationId: Number(organizationId) },
   });
 };
 
 const getClinicById = async (id, organizationId) => {
-  const clinic = await prisma.clinic.findUnique({ where: { id: Number(id) } });
+  const clinic = await prisma.clinics.findUnique({ where: { id: Number(id) } });
   if (!clinic) throw new AppError('Clinic not found', 404, 'NOT_FOUND');
   return assertOrganization(clinic, organizationId, 'Clinic');
 };
 
 const getClinicsByOrganization = async (organizationId) => {
-  return await prisma.clinic.findMany({
+  return await prisma.clinics.findMany({
     where: { organizationId: Number(organizationId) },
   });
 };
 
 const updateClinic = async (id, data, organizationId) => {
   await getClinicById(id, organizationId);
-  return await prisma.clinic.update({ where: { id: Number(id) }, data });
+  return await prisma.clinics.update({ where: { id: Number(id) }, data });
 };
 
 const deleteClinic = async (id, organizationId) => {
   await getClinicById(id, organizationId);
-  return await prisma.clinic.delete({ where: { id: Number(id) } });
+  return await prisma.clinics.delete({ where: { id: Number(id) } });
 };
 
 const associateClinicToPlan = async (clinicId, planId, organizationId) => {
   await getClinicById(clinicId, organizationId);
   await getPlanById(planId, organizationId);
-  return await prisma.clinic.update({
+  return await prisma.clinics.update({
     where: { id: Number(clinicId) },
     data: { planId: Number(planId) },
   });
@@ -106,7 +106,7 @@ const associateClinicToPlan = async (clinicId, planId, organizationId) => {
 const associateClinicToSubscription = async (clinicId, subscriptionId, organizationId) => {
   await getClinicById(clinicId, organizationId);
   await getSubscriptionById(subscriptionId, organizationId);
-  return await prisma.clinic.update({
+  return await prisma.clinics.update({
     where: { id: Number(clinicId) },
     data: { subscriptionId: Number(subscriptionId) },
   });
@@ -137,3 +137,4 @@ module.exports = {
   associateClinicToSubscription,
   createOrganization,
 };
+

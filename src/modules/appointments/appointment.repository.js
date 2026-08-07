@@ -1,10 +1,10 @@
 const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   return await prisma.appointment.create({
     data: {
       ...data,
-      organizationId
+      clinicId
     },
     include: {
       client: true,
@@ -13,9 +13,9 @@ const create = async (data, organizationId) => {
   });
 };
 
-const findAll = async (organizationId) => {
+const findAll = async (clinicId) => {
   return await prisma.appointment.findMany({
-    where: { organizationId },
+    where: { clinicId },
     include: {
       client: true,
       pet: true,
@@ -25,9 +25,9 @@ const findAll = async (organizationId) => {
   });
 };
 
-const findById = async (id, organizationId) => {
+const findById = async (id, clinicId) => {
   return await prisma.appointment.findFirst({
-    where: { id, organizationId },
+    where: { id, clinicId },
     include: {
       client: true,
       pet: true,
@@ -36,11 +36,11 @@ const findById = async (id, organizationId) => {
   });
 };
 
-const findByPetAndDateRange = async (petId, startDate, endDate, organizationId) => {
+const findByPetAndDateRange = async (petId, startDate, endDate, clinicId) => {
   return await prisma.appointment.findMany({
     where: {
       petId,
-      organizationId,
+      clinicId,
       date: {
         gte: startDate,
         lte: endDate
@@ -53,10 +53,10 @@ const findByPetAndDateRange = async (petId, startDate, endDate, organizationId) 
   });
 };
 
-const findByDateRange = async (startDate, endDate, organizationId) => {
+const findByDateRange = async (startDate, endDate, clinicId) => {
   return await prisma.appointment.findMany({
     where: {
-      organizationId,
+      clinicId,
       date: {
         gte: startDate,
         lte: endDate
@@ -70,12 +70,12 @@ const findByDateRange = async (startDate, endDate, organizationId) => {
   });
 };
 
-const checkAvailability = async (date, duration, organizationId) => {
+const checkAvailability = async (date, duration, clinicId) => {
   const endTime = new Date(date.getTime() + duration * 60000);
 
   const conflicts = await prisma.appointment.findMany({
     where: {
-      organizationId,
+      clinicId,
       status: { not: 'cancelled' },
       date: {
         lt: endTime
@@ -89,9 +89,9 @@ const checkAvailability = async (date, duration, organizationId) => {
   });
 };
 
-const update = async (id, organizationId, data) => {
+const update = async (id, clinicId, data) => {
   return await prisma.appointment.update({
-    where: { id, organizationId },
+    where: { id, clinicId },
     data,
     include: {
       client: true,
@@ -101,9 +101,9 @@ const update = async (id, organizationId, data) => {
   });
 };
 
-const remove = async (id, organizationId) => {
+const remove = async (id, clinicId) => {
   return await prisma.appointment.delete({
-    where: { id, organizationId }
+    where: { id, clinicId }
   });
 };
 

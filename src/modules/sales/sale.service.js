@@ -6,15 +6,15 @@ const { prisma } = require('../../lib/prisma');
 
 const TAX_RATE = 0.14; // IVA 14% en Uruguay
 
-const create = async (data, organizationId) => {
-  return await repository.create(data, organizationId);
+const create = async (data, clinicId) => {
+  return await repository.create(data, clinicId);
 };
 
-const createSale = async (saleData, organizationId) => {
+const createSale = async (saleData, clinicId) => {
   const { clientId, petId, consultationId, items, discount = 0, paymentMethod } = saleData;
 
   // Validar que el cliente existe
-  const client = await clientRepository.findById(clientId, organizationId);
+  const client = await clientRepository.findById(clientId, clinicId);
   if (!client) {
     throw new AppError('Cliente no encontrado', 404);
   }
@@ -22,7 +22,7 @@ const createSale = async (saleData, organizationId) => {
   // Validar mascota si se proporciona
   if (petId) {
     const pet = await prisma.pet.findFirst({
-      where: { id: petId, organizationId, clientId }
+      where: { id: petId, clinicId, clientId }
     });
     if (!pet) {
       throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
@@ -34,7 +34,7 @@ const createSale = async (saleData, organizationId) => {
     .filter(item => item.itemType === 'product')
     .map(item => item.itemId);
 
-  const products = await productRepository.findByIds(productIds, organizationId);
+  const products = await productRepository.findByIds(productIds, clinicId);
 
   // Crear mapa de productos para validación rápida
   const productMap = new Map(products.map(p => [p.id, p]));
@@ -114,35 +114,35 @@ const createSale = async (saleData, organizationId) => {
     salePayload,
     processedItems,
     stockMovements,
-    organizationId
+    clinicId
   );
 
   return sale;
 };
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
+const getAll = async (clinicId) => {
+  return await repository.findAll(clinicId);
 };
 
-const getById = async (id, organizationId) => {
-  const item = await repository.findById(id, organizationId);
+const getById = async (id, clinicId) => {
+  const item = await repository.findById(id, clinicId);
   if (!item) {
     throw new AppError('Venta no encontrada', 404);
   }
   return item;
 };
 
-const getSalesByClient = async (clientId, organizationId) => {
+const getSalesByClient = async (clientId, clinicId) => {
   // Validar que el cliente existe
-  const client = await clientRepository.findById(clientId, organizationId);
+  const client = await clientRepository.findById(clientId, clinicId);
   if (!client) {
     throw new AppError('Cliente no encontrado', 404);
   }
 
-  return await repository.getSalesByClient(clientId, organizationId);
+  return await repository.getSalesByClient(clientId, clinicId);
 };
 
-const getSalesReport = async (startDate, endDate, organizationId) => {
+const getSalesReport = async (startDate, endDate, clinicId) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
 
@@ -150,11 +150,11 @@ const getSalesReport = async (startDate, endDate, organizationId) => {
     throw new AppError('Fecha de inicio no puede ser posterior a la fecha fin', 400);
   }
 
-  return await repository.getTotalSalesByPeriod(start, end, organizationId);
+  return await repository.getTotalSalesByPeriod(start, end, clinicId);
 };
 
-const cancelSale = async (id, organizationId) => {
-  const sale = await getById(id, organizationId);
+const cancelSale = async (id, clinicId) => {
+  const sale = await getById(id, clinicId);
 
   if (sale.status === 'cancelled') {
     throw new AppError('La venta ya está cancelada', 400);

@@ -12,6 +12,7 @@ const treatmentRoutes = require("../modules/treatments/treatment.routes");
 const prescriptionRoutes = require("../modules/prescriptions/prescription.routes");
 const superadminRoutes = require("../modules/superadmin/superadmin.routes"); // ← NUEVO
 
+const adminRoutes = require('../modules/admin/admin.routes');
 module.exports = (app) => {
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
@@ -26,4 +27,5 @@ module.exports = (app) => {
   app.use("/api/treatments", treatmentRoutes);
   app.use("/api/prescriptions", prescriptionRoutes);
   app.use("/api/superadmin", superadminRoutes); // ← NUEVO
+  app.use('/api/admin', adminRoutes);
 };

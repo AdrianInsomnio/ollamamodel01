@@ -1,11 +1,11 @@
 const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   const { items, ...saleData } = data;
   return await prisma.sale.create({
     data: {
       ...saleData,
-      organizationId,
+      clinicId,
       items: {
         create: items.map(item => ({
           itemType: item.itemType,
@@ -25,13 +25,13 @@ const create = async (data, organizationId) => {
   });
 };
 
-const createWithStockMovements = async (saleData, items, stockMovements, organizationId) => {
+const createWithStockMovements = async (saleData, items, stockMovements, clinicId) => {
   return await prisma.$transaction(async (tx) => {
     // Crear la venta
     const sale = await tx.sale.create({
       data: {
         ...saleData,
-        organizationId,
+        clinicId,
         items: {
           create: items.map(item => ({
             itemType: item.itemType,
@@ -75,9 +75,9 @@ const createWithStockMovements = async (saleData, items, stockMovements, organiz
   });
 };
 
-const findAll = async (organizationId) => {
+const findAll = async (clinicId) => {
   return await prisma.sale.findMany({
-    where: { organizationId },
+    where: { clinicId },
     include: {
       client: { select: { id: true, name: true } },
       pet: { select: { id: true, name: true } },
@@ -87,9 +87,9 @@ const findAll = async (organizationId) => {
   });
 };
 
-const findById = async (id, organizationId) => {
+const findById = async (id, clinicId) => {
   return await prisma.sale.findFirst({
-    where: { id, organizationId },
+    where: { id, clinicId },
     include: {
       client: { select: { id: true, name: true } },
       pet: { select: { id: true, name: true } },
@@ -99,9 +99,9 @@ const findById = async (id, organizationId) => {
   });
 };
 
-const getSalesByClient = async (clientId, organizationId) => {
+const getSalesByClient = async (clientId, clinicId) => {
   return await prisma.sale.findMany({
-    where: { clientId, organizationId },
+    where: { clientId, clinicId },
     include: {
       items: true,
       pet: { select: { id: true, name: true } }
@@ -110,10 +110,10 @@ const getSalesByClient = async (clientId, organizationId) => {
   });
 };
 
-const getTotalSalesByPeriod = async (startDate, endDate, organizationId) => {
+const getTotalSalesByPeriod = async (startDate, endDate, clinicId) => {
   const result = await prisma.sale.aggregate({
     where: {
-      organizationId,
+      clinicId,
       createdAt: {
         gte: startDate,
         lte: endDate

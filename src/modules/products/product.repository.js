@@ -1,10 +1,10 @@
-const { prisma } = require('../../lib/prisma');
+﻿const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
-  return await prisma.product.create({
+const create = async (data, clinicId) => {
+  return await prisma.products.create({
     data: {
       ...data,
-      organizationId
+      clinicId
     },
     include: {
       category: true
@@ -12,10 +12,10 @@ const create = async (data, organizationId) => {
   });
 };
 
-const findAll = async (organizationId, options = {}) => {
+const findAll = async (clinicId, options = {}) => {
   const { includeDiscontinued = false, categoryId } = options;
 
-  const where = { organizationId };
+  const where = { clinicId };
 
   if (!includeDiscontinued) {
     where.discontinuedAt = null;
@@ -25,7 +25,7 @@ const findAll = async (organizationId, options = {}) => {
     where.categoryId = parseInt(categoryId);
   }
 
-  return await prisma.product.findMany({
+  return await prisma.products.findMany({
     where,
     include: {
       category: true
@@ -34,9 +34,9 @@ const findAll = async (organizationId, options = {}) => {
   });
 };
 
-const findById = async (id, organizationId) => {
-  return await prisma.product.findFirst({
-    where: { id, organizationId },
+const findById = async (id, clinicId) => {
+  return await prisma.products.findFirst({
+    where: { id, clinicId },
     include: {
       category: true,
       stockMovements: {
@@ -47,18 +47,18 @@ const findById = async (id, organizationId) => {
   });
 };
 
-const findByIds = async (ids, organizationId) => {
-  return await prisma.product.findMany({
+const findByIds = async (ids, clinicId) => {
+  return await prisma.products.findMany({
     where: {
       id: { in: ids },
-      organizationId
+      clinicId
     }
   });
 };
 
-const update = async (id, organizationId, data) => {
-  return await prisma.product.update({
-    where: { id, organizationId },
+const update = async (id, clinicId, data) => {
+  return await prisma.products.update({
+    where: { id, clinicId },
     data,
     include: {
       category: true
@@ -66,15 +66,15 @@ const update = async (id, organizationId, data) => {
   });
 };
 
-const remove = async (id, organizationId) => {
-  return await prisma.product.delete({
-    where: { id, organizationId }
+const remove = async (id, clinicId) => {
+  return await prisma.products.delete({
+    where: { id, clinicId }
   });
 };
 
-const updateStock = async (id, quantityChange, organizationId) => {
-  return await prisma.product.update({
-    where: { id, organizationId },
+const updateStock = async (id, quantityChange, clinicId) => {
+  return await prisma.products.update({
+    where: { id, clinicId },
     data: {
       stock: {
         increment: quantityChange
@@ -83,12 +83,12 @@ const updateStock = async (id, quantityChange, organizationId) => {
   });
 };
 
-const getLowStockProducts = async (organizationId) => {
-  return await prisma.product.findMany({
+const getLowStockProducts = async (clinicId) => {
+  return await prisma.products.findMany({
     where: {
-      organizationId,
+      clinicId,
       stock: {
-        lte: prisma.product.fields.minStock
+        lte: prisma.products.fields.minStock
       },
       isActive: true
     },
@@ -96,11 +96,11 @@ const getLowStockProducts = async (organizationId) => {
   });
 };
 
-const getStockMovements = async (productId, organizationId, limit = 50) => {
+const getStockMovements = async (productId, clinicId, limit = 50) => {
   return await prisma.stockMovement.findMany({
     where: {
       productId,
-      product: { organizationId }
+      product: { clinicId }
     },
     orderBy: { createdAt: 'desc' },
     take: limit
@@ -113,11 +113,11 @@ const createStockMovement = async (data) => {
   });
 };
 
-const getProductsByCategory = async (category, organizationId) => {
-  return await prisma.product.findMany({
+const getProductsByCategory = async (category, clinicId) => {
+  return await prisma.products.findMany({
     where: {
       category,
-      organizationId,
+      clinicId,
       isActive: true
     },
     orderBy: { name: 'asc' }
@@ -137,4 +137,5 @@ module.exports = {
   createStockMovement,
   getProductsByCategory
 };
+
 

@@ -5,33 +5,43 @@ const findUserById = async (id, clinicId) => {
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.user.findFirst({
+  return await prisma.users.findFirst({
     where,
     select: {
       id: true,
       username: true,
       email: true,
-      createdAt: true,
+      role: true,
+      organizationId: true,
+      created_at: true,
       clinics: { select: { id: true, name: true } },
     },
   });
 };
 
-const getAllUsers = async (clinicId) => {
+const getAllUsers = async (clinicId, organizationId) => {
   const where = {};
   if (clinicId !== undefined && clinicId !== null) {
     where.clinics = { some: { id: Number(clinicId) } };
   }
-  return await prisma.user.findMany({
+  if (organizationId !== undefined && organizationId !== null) {
+    where.organizationId = Number(organizationId);
+  }
+  return await prisma.users.findMany({
     where,
     select: {
       id: true,
       username: true,
       email: true,
-      createdAt: true,
+      role: true,
+      organizationId: true,
+      created_at: true,
       clinics: { select: { id: true, name: true } },
     },
   });
-};
+}
 
-module.exports = { findUserById, getAllUsers };
+module.exports = {
+  findUserById,
+  getAllUsers
+};

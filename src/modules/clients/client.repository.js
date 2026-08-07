@@ -1,10 +1,10 @@
 const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   return await prisma.client.create({
     data: {
       ...data,
-      organizationId
+      clinicId
     },
     include: {
       pets: true
@@ -12,9 +12,9 @@ const create = async (data, organizationId) => {
   });
 };
 
-const findAll = async (organizationId) => {
+const findAll = async (clinicId) => {
   return await prisma.client.findMany({
-    where: { organizationId },
+    where: { clinicId },
     include: {
       pets: true,
       _count: {
@@ -25,9 +25,9 @@ const findAll = async (organizationId) => {
   });
 };
 
-const findById = async (id, organizationId) => {
+const findById = async (id, clinicId) => {
   return await prisma.client.findFirst({
-    where: { id, organizationId },
+    where: { id, clinicId },
     include: {
       pets: true,
       sales: true,
@@ -37,23 +37,23 @@ const findById = async (id, organizationId) => {
   });
 };
 
-const findByEmail = async (email, organizationId) => {
+const findByEmail = async (email, clinicId) => {
   return await prisma.client.findFirst({
-    where: { email, organizationId }
+    where: { email, clinicId }
   });
 };
 
-const findByDocumentId = async (documentId, organizationId) => {
+const findByDocumentId = async (documentId, clinicId) => {
   return await prisma.client.findFirst({
-    where: { documentId, organizationId }
+    where: { documentId, clinicId }
   });
 };
 
-const search = async (query, organizationId) => {
+const search = async (query, clinicId) => {
   const searchQuery = query.trim();
   return await prisma.client.findMany({
     where: {
-      organizationId,
+      clinicId,
       OR: [
         { name: { contains: searchQuery, mode: 'insensitive' } },
         { documentId: { contains: searchQuery, mode: 'insensitive' } },
@@ -71,15 +71,15 @@ const search = async (query, organizationId) => {
   });
 };
 
-const createWithPet = async (clientData, petData, organizationId) => {
+const createWithPet = async (clientData, petData, clinicId) => {
   return await prisma.client.create({
     data: {
       ...clientData,
-      organizationId,
+      clinicId,
       pets: {
         create: {
           ...petData,
-          organizationId
+          clinicId
         }
       }
     },
@@ -89,9 +89,9 @@ const createWithPet = async (clientData, petData, organizationId) => {
   });
 };
 
-const getClientHistory = async (id, organizationId) => {
+const getClientHistory = async (id, clinicId) => {
   return await prisma.client.findFirst({
-    where: { id, organizationId },
+    where: { id, clinicId },
     include: {
       pets: {
         include: {
@@ -113,9 +113,9 @@ const getClientHistory = async (id, organizationId) => {
   });
 };
 
-const update = async (id, organizationId, data) => {
+const update = async (id, clinicId, data) => {
   return await prisma.client.update({
-    where: { id, organizationId },
+    where: { id, clinicId },
     data,
     include: {
       pets: true
@@ -123,9 +123,9 @@ const update = async (id, organizationId, data) => {
   });
 };
 
-const remove = async (id, organizationId) => {
+const remove = async (id, clinicId) => {
   return await prisma.client.delete({
-    where: { id, organizationId }
+    where: { id, clinicId }
   });
 };
 

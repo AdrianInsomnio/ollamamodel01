@@ -115,7 +115,7 @@ const getClinicMetrics = async (clinicId, start, end) => {
 };
 
 const findUsersWithMetrics = async (organizationId) => {
-  return await prisma.user.findMany({
+  return await prisma.users.findMany({
     where: { organizationId: Number(organizationId) },
     select: {
       id: true,
@@ -124,8 +124,45 @@ const findUsersWithMetrics = async (organizationId) => {
       role: true,
       isActive: true,
       lastLogin: true,
-      createdAt: true,
+      created_at: true,
       clinics: { select: { id: true, name: true } },
+    },
+  });
+}
+
+const createUser = async (data) => {
+  const { username, email, password, role, isActive, organizationId, clinicIds = [] } = data;
+  const orgId = Number(organizationId);
+  const userData = {
+    username,
+    email,
+    password,
+    role,
+    isActive: isActive ?? true,
+    organizationId: orgId,
+  };
+  let user;
+  await prisma.$transaction(async (tx) => {
+    user = await tx.users.create({ data: userData });
+    if (clinicIds && clinicIds.length > 0) {
+      const clinicIdNumbers = clinicIds.map(Number);
+      await tx.users.update({
+        where: { id: user.id },
+        data: {
+          clinics: { connect: clinicIdNumbers.map(id => ({ id })) },
+        },
+      });
+    }
+  });
+  return user;
+};
+
+const updateUserClinics = async (userId, clinicIds) => {
+  const clinicIdNumbers = clinicIds.map(Number);
+  await prisma.users.update({
+    where: { id: Number(userId) },
+    data: {
+      clinics: { set: clinicIdNumbers.map(id => ({ id })) },
     },
   });
 };
@@ -136,4 +173,6 @@ module.exports = {
   getClinicMetrics,
   findUsersWithMetrics,
   getDayRangeInTimezone,
+  createUser,
+  updateUserClinics,
 };

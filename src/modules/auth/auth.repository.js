@@ -1,45 +1,125 @@
-const { prisma } = require('../../lib/prisma');
+﻿const { prisma } = require('../../lib/prisma');
 const { ROLES } = require('../../core/constants/roles');
 
-const findUserByEmail = async (email, organizationId) => {
-  return await prisma.user.findFirst({
-    where: { email, organizationId },
-    select: { id: true, username: true, email: true, password: true, organizationId: true, role: true }
+const findUserByEmail = async (email, clinicId = undefined) => {
+  const where = { email };
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
+  return await prisma.users.findFirst({
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      organizationId: true,
+      role: true,
+      clinics: { select: { id: true, name: true } }
+    }
   });
 };
 
-const findUserById = async (id, organizationId) => {
-  return await prisma.user.findUnique({
+const findUserById = async (id, clinicId) => {
+  const where = { id };
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
+  return await prisma.users.findFirst({
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      organizationId: true,
+      role: true,
+      clinics: { select: { id: true, name: true } }
+    }
+  });
+};
+
+const findUserByEmailOrUsername = async (email, username, clinicId) => {
+  const where = {
+    OR: [{ email }, { username }]
+  };
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
+  return await prisma.users.findFirst({
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      organizationId: true,
+      role: true,
+      clinics: { select: { id: true, name: true } }
+    }
+  });
+};
+
+const createUser = async (username, email, hashedPassword, organizationId, role = ROLES.USER, clinicIds = []) => {
+  const data = {
+    username,
+    email,
+    password: hashedPassword,
+    organizationId,
+    role
+  };
+  if (clinicIds.length > 0) {
+    data.clinics = { connect: clinicIds.map((id) => ({ id })) };
+  }
+  return await prisma.users.create({
+    data,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      organizationId: true,
+      role: true,
+      clinics: { select: { id: true, name: true } }
+    }
+  });
+};
+
+const updatePassword = async (id, hashedPassword, passwordChangedAt = new Date()) => {
+  return await prisma.users.update({
     where: { id },
-    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
-  });
-};
-
-const findUserByEmailOrUsername = async (email, username, organizationId) => {
-  return await prisma.user.findFirst({
-    where: {
-      organizationId,
-      OR: [{ email }, { username }]
-    }
-  });
-};
-
-const createUser = async (username, email, hashedPassword, organizationId, role = ROLES.ADMIN) => {
-  return await prisma.user.create({
     data: {
-      username,
-      email,
       password: hashedPassword,
-      organizationId,
-      role
+      passwordChangedAt,
+      updated_at: new Date(),
+    },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      organizationId: true,
+      clinics: { select: { id: true, name: true } }
     }
   });
 };
 
-const getAllUsers = async (organizationId) => {
-  return await prisma.user.findMany({
-    where: { organizationId },
-    select: { id: true, username: true, email: true, createdAt: true, organizationId: true }
+const getAllUsers = async (clinicId) => {
+  const where = {};
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
+  return await prisma.users.findMany({
+    where,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      organizationId: true,
+      role: true,
+      clinics: { select: { id: true, name: true } }
+    }
   });
 };
 
@@ -48,5 +128,7 @@ module.exports = {
   findUserById,
   findUserByEmailOrUsername,
   createUser,
+  updatePassword,
   getAllUsers
 };
+

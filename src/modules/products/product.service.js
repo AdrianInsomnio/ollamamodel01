@@ -1,7 +1,7 @@
 const repository = require('./product.repository');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   // Validar datos requeridos
   if (!data.name || !data.price) {
     throw new AppError('Nombre y precio son requeridos', 400);
@@ -23,23 +23,23 @@ const create = async (data, organizationId) => {
     throw new AppError('El stock mínimo no puede ser negativo', 400);
   }
 
-  return await repository.create(data, organizationId);
+  return await repository.create(data, clinicId);
 };
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
+const getAll = async (clinicId) => {
+  return await repository.findAll(clinicId);
 };
 
-const getById = async (id, organizationId) => {
-  const product = await repository.findById(id, organizationId);
+const getById = async (id, clinicId) => {
+  const product = await repository.findById(id, clinicId);
   if (!product) {
     throw new AppError('Producto no encontrado', 404);
   }
   return product;
 };
 
-const update = async (id, organizationId, data) => {
-  const product = await getById(id, organizationId);
+const update = async (id, clinicId, data) => {
+  const product = await getById(id, clinicId);
 
   // Validaciones
   if (data.price !== undefined && data.price <= 0) {
@@ -69,22 +69,22 @@ const update = async (id, organizationId, data) => {
     });
   }
 
-  return await repository.update(id, organizationId, data);
+  return await repository.update(id, clinicId, data);
 };
 
-const remove = async (id, organizationId) => {
-  const product = await getById(id, organizationId);
+const remove = async (id, clinicId) => {
+  const product = await getById(id, clinicId);
 
   // Verificar si tiene stock
   if (product.stock > 0) {
     throw new AppError('No se puede eliminar un producto con stock disponible', 400);
   }
 
-  return await repository.remove(id, organizationId);
+  return await repository.remove(id, clinicId);
 };
 
-const adjustStock = async (id, quantity, reason, organizationId, notes = '') => {
-  const product = await getById(id, organizationId);
+const adjustStock = async (id, quantity, reason, clinicId, notes = '') => {
+  const product = await getById(id, clinicId);
 
   const newStock = product.stock + quantity;
 
@@ -93,7 +93,7 @@ const adjustStock = async (id, quantity, reason, organizationId, notes = '') => 
   }
 
   // Actualizar stock
-  await repository.updateStock(id, quantity, organizationId);
+  await repository.updateStock(id, quantity, clinicId);
 
   // Registrar movimiento
   await repository.createStockMovement({
@@ -107,8 +107,8 @@ const adjustStock = async (id, quantity, reason, organizationId, notes = '') => 
   return { message: 'Stock ajustado exitosamente', newStock };
 };
 
-const getLowStockAlerts = async (organizationId) => {
-  const lowStockProducts = await repository.getLowStockProducts(organizationId);
+const getLowStockAlerts = async (clinicId) => {
+  const lowStockProducts = await repository.getLowStockProducts(clinicId);
 
   return lowStockProducts.map(product => ({
     id: product.id,
@@ -119,22 +119,22 @@ const getLowStockAlerts = async (organizationId) => {
   }));
 };
 
-const getStockMovements = async (id, organizationId, limit = 50) => {
-  await getById(id, organizationId); // Validar que existe
+const getStockMovements = async (id, clinicId, limit = 50) => {
+  await getById(id, clinicId); // Validar que existe
 
-  return await repository.getStockMovements(id, organizationId, limit);
+  return await repository.getStockMovements(id, clinicId, limit);
 };
 
-const getProductsByCategory = async (category, organizationId) => {
+const getProductsByCategory = async (category, clinicId) => {
   if (!category) {
     throw new AppError('Categoría es requerida', 400);
   }
 
-  return await repository.getProductsByCategory(category, organizationId);
+  return await repository.getProductsByCategory(category, clinicId);
 };
 
-const calculateProfitMargin = async (id, organizationId) => {
-  const product = await getById(id, organizationId);
+const calculateProfitMargin = async (id, clinicId) => {
+  const product = await getById(id, clinicId);
 
   if (!product.cost) {
     return { profitMargin: null, message: 'No hay costo definido para calcular margen' };
@@ -152,8 +152,8 @@ const calculateProfitMargin = async (id, organizationId) => {
   };
 };
 
-const getInventoryValue = async (organizationId) => {
-  const products = await repository.findAll(organizationId);
+const getInventoryValue = async (clinicId) => {
+  const products = await repository.findAll(clinicId);
 
   const inventoryValue = products.reduce((total, product) => {
     return total + (product.stock * product.cost || 0);

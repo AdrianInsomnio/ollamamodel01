@@ -5,7 +5,7 @@ const getDashboardMetrics = async (req, res, next) => {
   try {
     const user = req.user;
     const data = await service.getDashboardMetrics(user);
-    res.json({ metrics: data });
+    res.json(data);
   } catch (error) {
     next(error);
   }
@@ -15,7 +15,7 @@ const getClinics = async (req, res, next) => {
   try {
     const user = req.user;
     const data = await service.listClinics(user);
-    res.json({ clinics: data });
+    res.json(data);
   } catch (error) {
     next(error);
   }
@@ -25,7 +25,31 @@ const getUsers = async (req, res, next) => {
   try {
     const user = req.user;
     const data = await service.listUsers(user);
-    res.json({ users: data });
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createUser = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const data = await service.createUser(req.body, user);
+    res.status(201).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateUserClinics = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'SUPER_ADMIN') {
+      throw new AppError('Access denied', 403, 'FORBIDDEN');
+    }
+    const { clinicIds } = req.body;
+    await service.updateUserClinics(req.params.userId, clinicIds);
+    res.status(200).json({ message: 'Clinicas actualizadas' });
   } catch (error) {
     next(error);
   }
@@ -35,4 +59,6 @@ module.exports = {
   getDashboardMetrics,
   getClinics,
   getUsers,
+  createUser,
+  updateUserClinics,
 };

@@ -13,5 +13,8 @@ router.get('/clinics', controller.getClinics);
 
 // Listado de usuarios: solo SUPER_ADMIN (el service lo valida igual).
 router.get('/users', controller.getUsers);
+router.post('/', controller.createUser);
+router.put('/users/:userId/clinics', controller.updateUserClinics);
 
 module.exports = router;
+

@@ -1,39 +1,40 @@
-const { prisma } = require('../../lib/prisma');
+﻿const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
-  return await prisma.service.create({
+const create = async (data, clinicId) => {
+  return await prisma.services.create({
     data: {
       ...data,
-      organizationId
+      clinicId
     }
   });
 };
 
-const findAll = async (organizationId) => {
-  return await prisma.service.findMany({
-    where: { organizationId },
+const findAll = async (clinicId) => {
+  return await prisma.services.findMany({
+    where: { clinicId },
     orderBy: { name: 'asc' }
   });
 };
 
-const findById = async (id, organizationId) => {
-  return await prisma.service.findFirst({
-    where: { id, organizationId }
+const findById = async (id, clinicId) => {
+  return await prisma.services.findFirst({
+    where: { id, clinicId }
   });
 };
 
-const update = async (id, organizationId, data) => {
-  return await prisma.service.update({
-    where: { id, organizationId },
+const update = async (id, clinicId, data) => {
+  return await prisma.services.update({
+    where: { id, clinicId },
     data
   });
 };
 
-const remove = async (id, organizationId) => {
-  return await prisma.service.delete({
-    where: { id, organizationId }
+const remove = async (id, clinicId) => {
+  return await prisma.services.delete({
+    where: { id, clinicId }
   });
 };
 
 module.exports = { create, findAll, findById, update, remove };
+
 

@@ -1,10 +1,10 @@
 const { prisma } = require('../../lib/prisma');
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   return await prisma.consultation.create({
     data: {
       ...data,
-      organizationId
+      clinicId
     },
     include: {
       pet: true,
@@ -17,9 +17,9 @@ const create = async (data, organizationId) => {
   });
 };
 
-const findAll = async (organizationId) => {
+const findAll = async (clinicId) => {
   return await prisma.consultation.findMany({
-    where: { organizationId },
+    where: { clinicId },
     include: {
       pet: true,
       client: true,
@@ -32,9 +32,9 @@ const findAll = async (organizationId) => {
   });
 };
 
-const findById = async (id, organizationId) => {
+const findById = async (id, clinicId) => {
   return await prisma.consultation.findFirst({
-    where: { id, organizationId },
+    where: { id, clinicId },
     include: {
       pet: true,
       client: true,
@@ -47,9 +47,9 @@ const findById = async (id, organizationId) => {
   });
 };
 
-const findByPetId = async (petId, organizationId) => {
+const findByPetId = async (petId, clinicId) => {
   return await prisma.consultation.findMany({
-    where: { petId, organizationId },
+    where: { petId, clinicId },
     include: {
       pet: true,
       client: true,
@@ -61,9 +61,9 @@ const findByPetId = async (petId, organizationId) => {
   });
 };
 
-const findByClientId = async (clientId, organizationId) => {
+const findByClientId = async (clientId, clinicId) => {
   return await prisma.consultation.findMany({
-    where: { clientId, organizationId },
+    where: { clientId, clinicId },
     include: {
       pet: true,
       client: true,
@@ -120,9 +120,9 @@ const removePrescription = async (prescriptionId) => {
   });
 };
 
-const update = async (id, organizationId, data) => {
+const update = async (id, clinicId, data) => {
   return await prisma.consultation.update({
-    where: { id, organizationId },
+    where: { id, clinicId },
     data,
     include: {
       pet: true,
@@ -135,9 +135,9 @@ const update = async (id, organizationId, data) => {
   });
 };
 
-const remove = async (id, organizationId) => {
+const remove = async (id, clinicId) => {
   // Verificar si hay diagnósticos (puede ser restricción)
-  const consultation = await findById(id, organizationId);
+  const consultation = await findById(id, clinicId);
   if (consultation.diagnoses.length > 0) {
     throw new Error('Cannot delete consultation with diagnoses');
   }
@@ -147,13 +147,13 @@ const remove = async (id, organizationId) => {
   await prisma.prescription.deleteMany({ where: { consultationId: id } });
 
   return await prisma.consultation.delete({
-    where: { id, organizationId }
+    where: { id, clinicId }
   });
 };
 
 const updateStatus = async (id, status, closedAt = null) => {
   return await prisma.consultation.update({
-    where: { id, organizationId },
+    where: { id, clinicId },
     data: {
       status,
       ...(closedAt && { closedAt })

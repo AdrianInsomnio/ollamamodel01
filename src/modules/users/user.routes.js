@@ -9,6 +9,6 @@ const router = express.Router();
 router.get('/profile', authMiddleware, getProfile);
 
 // Listar todos los usuarios (solo admin)
-router.get('/', authMiddleware, authorize(ROLES.ADMIN), getAll);
+router.get('/', authMiddleware, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), getAll);
 
 module.exports = router;

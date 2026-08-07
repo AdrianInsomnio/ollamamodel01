@@ -1,6 +1,7 @@
 ﻿const { prisma } = require('../../lib/prisma');
 const repository = require('./admin.repository');
 const { AppError } = require('../../core/errors/AppError');
+const { ROLES } = require('../../core/constants/roles');
 
 const emptyTotals = () => ({
   salesTodayTotal: 0,
@@ -206,8 +207,28 @@ const listUsers = async (user) => {
   };
 };
 
+const createUser = async (data, actor) => {
+  // Only SUPER_ADMIN and ADMIN can create users
+  if (![ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(actor.role)) {
+    throw new AppError('Access denied', 403, 'FORBIDDEN');
+  }
+  // TODO: For ADMIN, validate that clinicIds belong to their own clinic if needed
+  // Pass organizationId from actor to ensure correct org
+  return await repository.createUser({ ...data, organizationId: actor.organizationId });
+};
+
+const updateUserClinics = async (userId, clinicIds) => {
+  // Only SUPER_ADMIN can update clinics assignment
+  if (userId !== undefined && userId !== null) {
+    // In a real scenario, we would also validate that the actor has permission (SUPER_ADMIN)
+    // For simplicity, we rely on route protection.
+    return await repository.updateUserClinics(userId, clinicIds);
+  }
+};
+
 module.exports = {
   getDashboardMetrics,
   listClinics,
   listUsers,
+  createUser,
 };

@@ -25,7 +25,7 @@ const extractToken = (req) => {
 const decodeAndAttach = async (req, token) => {
   const decoded = verifyToken(token);
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { id: decoded.id },
     select: {
       id: true,
@@ -47,6 +47,14 @@ const decodeAndAttach = async (req, token) => {
   if (!user.clinics || user.clinics.length === 0) {
     // Coherente con auth.service.login que lanza 403 NO_CLINIC.
     throw new AppError('User has no clinic assigned', 403, 'NO_CLINIC_ASSIGNED');
+  }
+
+  if (user.passwordChangedAt && decoded.iat) {
+    const passwordChangedAt = new Date(user.passwordChangedAt).getTime();
+    const tokenIssuedAt = decoded.iat * 1000;
+    if (tokenIssuedAt <= passwordChangedAt) {
+      throw new AppError('Token is no longer valid', 401, 'TOKEN_REVOKED');
+    }
   }
 
   req.user = {
@@ -100,3 +108,4 @@ const optionalAuthMiddleware = async (req, res, next) => {
 };
 
 module.exports = { authMiddleware, optionalAuthMiddleware };
+

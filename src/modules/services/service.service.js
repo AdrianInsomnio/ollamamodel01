@@ -1,30 +1,30 @@
 const repository = require('./service.repository');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, organizationId) => {
-  return await repository.create(data, organizationId);
+const create = async (data, clinicId) => {
+  return await repository.create(data, clinicId);
 };
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
+const getAll = async (clinicId) => {
+  return await repository.findAll(clinicId);
 };
 
-const getById = async (id, organizationId) => {
-  const item = await repository.findById(id, organizationId);
+const getById = async (id, clinicId) => {
+  const item = await repository.findById(id, clinicId);
   if (!item) {
     throw new AppError('Service not found', 404);
   }
   return item;
 };
 
-const update = async (id, organizationId, data) => {
-  await getById(id, organizationId);
-  return await repository.update(id, organizationId, data);
+const update = async (id, clinicId, data) => {
+  await getById(id, clinicId);
+  return await repository.update(id, clinicId, data);
 };
 
-const remove = async (id, organizationId) => {
-  await getById(id, organizationId);
-  return await repository.remove(id, organizationId);
+const remove = async (id, clinicId) => {
+  await getById(id, clinicId);
+  return await repository.remove(id, clinicId);
 };
 
 module.exports = { create, getAll, getById, update, remove };

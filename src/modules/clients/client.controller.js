@@ -2,7 +2,7 @@ const service = require('./client.service');
 
 const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body, req.user.organizationId);
+    const item = await service.create(req.body, req.user.clinicId);
     res.status(201).json({ client: item });
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ const create = async (req, res, next) => {
 
 const getAll = async (req, res, next) => {
   try {
-    const items = await service.getAll(req.user.organizationId);
+    const items = await service.getAll(req.user.clinicId);
     res.json({ clients: items });
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
-    const item = await service.getById(parseInt(req.params.id), req.user.organizationId);
+    const item = await service.getById(parseInt(req.params.id), req.user.clinicId);
     res.json({ client: item });
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ const getById = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const item = await service.update(parseInt(req.params.id), req.user.organizationId, req.body);
+    const item = await service.update(parseInt(req.params.id), req.user.clinicId, req.body);
     res.json({ client: item });
   } catch (error) {
     next(error);
@@ -38,7 +38,7 @@ const update = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
-    await service.remove(parseInt(req.params.id), req.user.organizationId);
+    await service.remove(parseInt(req.params.id), req.user.clinicId);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -48,7 +48,7 @@ const remove = async (req, res, next) => {
 const search = async (req, res, next) => {
   try {
     const { q } = req.query;
-    const items = await service.search(q, req.user.organizationId);
+    const items = await service.search(q, req.user.clinicId);
     res.json({ clients: items });
   } catch (error) {
     next(error);
@@ -57,7 +57,7 @@ const search = async (req, res, next) => {
 
 const createWithPet = async (req, res, next) => {
   try {
-    const item = await service.createWithPet(req.body, req.user.organizationId);
+    const item = await service.createWithPet(req.body, req.user.clinicId);
     res.status(201).json({ client: item });
   } catch (error) {
     next(error);
@@ -66,7 +66,7 @@ const createWithPet = async (req, res, next) => {
 
 const getHistory = async (req, res, next) => {
   try {
-    const history = await service.getClientHistory(parseInt(req.params.id), req.user.organizationId);
+    const history = await service.getClientHistory(parseInt(req.params.id), req.user.clinicId);
     res.json({ history });
   } catch (error) {
     next(error);

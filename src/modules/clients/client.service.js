@@ -13,7 +13,7 @@ const isValidPhone = (phone) => {
   return phoneRegex.test(phone);
 };
 
-const create = async (data, organizationId) => {
+const create = async (data, clinicId) => {
   // Validar campos requeridos
   if (!data.name || data.name.trim() === '') {
     throw new AppError('Client name is required', 400);
@@ -26,7 +26,7 @@ const create = async (data, organizationId) => {
 
   // Validar email único
   if (data.email) {
-    const existingEmail = await repository.findByEmail(data.email, organizationId);
+    const existingEmail = await repository.findByEmail(data.email, clinicId);
     if (existingEmail) {
       throw new AppError('Email already in use', 400);
     }
@@ -39,29 +39,29 @@ const create = async (data, organizationId) => {
 
   // Validar documentId único
   if (data.documentId) {
-    const existingDoc = await repository.findByDocumentId(data.documentId, organizationId);
+    const existingDoc = await repository.findByDocumentId(data.documentId, clinicId);
     if (existingDoc) {
       throw new AppError('Document ID already in use', 400);
     }
   }
 
-  return await repository.create(data, organizationId);
+  return await repository.create(data, clinicId);
 };
 
-const getAll = async (organizationId) => {
-  return await repository.findAll(organizationId);
+const getAll = async (clinicId) => {
+  return await repository.findAll(clinicId);
 };
 
-const getById = async (id, organizationId) => {
-  const item = await repository.findById(id, organizationId);
+const getById = async (id, clinicId) => {
+  const item = await repository.findById(id, clinicId);
   if (!item) {
     throw new AppError('Client not found', 404);
   }
   return item;
 };
 
-const getClientHistory = async (id, organizationId) => {
-  const client = await repository.getClientHistory(id, organizationId);
+const getClientHistory = async (id, clinicId) => {
+  const client = await repository.getClientHistory(id, clinicId);
   if (!client) {
     throw new AppError('Client not found', 404);
   }
@@ -77,15 +77,15 @@ const getClientHistory = async (id, organizationId) => {
   };
 };
 
-const update = async (id, organizationId, data) => {
-  await getById(id, organizationId);
+const update = async (id, clinicId, data) => {
+  await getById(id, clinicId);
 
   // Validar email si se actualiza
   if (data.email) {
     if (!isValidEmail(data.email)) {
       throw new AppError('Invalid email format', 400);
     }
-    const existingEmail = await repository.findByEmail(data.email, organizationId);
+    const existingEmail = await repository.findByEmail(data.email, clinicId);
     if (existingEmail && existingEmail.id !== id) {
       throw new AppError('Email already in use', 400);
     }
@@ -96,22 +96,22 @@ const update = async (id, organizationId, data) => {
     throw new AppError('Invalid phone format', 400);
   }
 
-  return await repository.update(id, organizationId, data);
+  return await repository.update(id, clinicId, data);
 };
 
-const remove = async (id, organizationId) => {
-  await getById(id, organizationId);
-  return await repository.remove(id, organizationId);
+const remove = async (id, clinicId) => {
+  await getById(id, clinicId);
+  return await repository.remove(id, clinicId);
 };
 
-const search = async (query, organizationId) => {
+const search = async (query, clinicId) => {
   if (!query || query.trim() === '') {
     throw new AppError('Search query is required', 400);
   }
-  return await repository.search(query.trim(), organizationId);
+  return await repository.search(query.trim(), clinicId);
 };
 
-const createWithPet = async (data, organizationId) => {
+const createWithPet = async (data, clinicId) => {
   // Validar campos requeridos del cliente
   if (!data.name || data.name.trim() === '') {
     throw new AppError('Client name is required', 400);
@@ -138,7 +138,7 @@ const createWithPet = async (data, organizationId) => {
 
   // Validar email único
   if (data.email) {
-    const existingEmail = await repository.findByEmail(data.email, organizationId);
+    const existingEmail = await repository.findByEmail(data.email, clinicId);
     if (existingEmail) {
       throw new AppError('Email already in use', 400);
     }
@@ -146,14 +146,14 @@ const createWithPet = async (data, organizationId) => {
 
   // Validar documentId único
   if (data.documentId) {
-    const existingDoc = await repository.findByDocumentId(data.documentId, organizationId);
+    const existingDoc = await repository.findByDocumentId(data.documentId, clinicId);
     if (existingDoc) {
       throw new AppError('Document ID already in use', 400);
     }
   }
 
   const { pet, ...clientData } = data;
-  return await repository.createWithPet(clientData, pet, organizationId);
+  return await repository.createWithPet(clientData, pet, clinicId);
 };
 
 module.exports = {
