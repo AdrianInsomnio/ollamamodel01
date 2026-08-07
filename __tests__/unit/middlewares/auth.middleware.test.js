@@ -2,13 +2,13 @@ const env = require('../../../src/config/env');
 const jwt = require('../../../src/core/utils/jwt.util');
 const { authMiddleware, optionalAuthMiddleware } = require('../../../src/core/middlewares/auth.middleware');
 
-// Mock prisma.users (plural) - el middleware real ahora usa prisma.users
+// Mock prisma.user (singular, LPTM)
 jest.mock('../../../src/lib/prisma', () => ({
-  prisma: { users: { findUnique: jest.fn() } },
+  prisma: { user: { findUnique: jest.fn() } },
 }));
 
 const prisma = require('../../../src/lib/prisma');
-const mockPrismaUser = prisma.prisma.users;
+const mockPrismaUser = prisma.prisma.user;
 
 const mockRes = () => ({
   statusCode: 200,

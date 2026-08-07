@@ -1,4 +1,4 @@
-﻿const { verifyToken } = require('../utils/jwt.util');
+const { verifyToken } = require('../utils/jwt.util');
 const { ROLES } = require('../constants/roles');
 const { readAuthCookie } = require('../utils/cookie.util');
 const { prisma } = require('../../lib/prisma');
@@ -25,7 +25,7 @@ const extractToken = (req) => {
 const decodeAndAttach = async (req, token) => {
   const decoded = verifyToken(token);
 
-  const user = await prisma.users.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: decoded.id },
     select: {
       id: true,
@@ -44,7 +44,10 @@ const decodeAndAttach = async (req, token) => {
     throw new AppError('User not found', 401, 'UNAUTHORIZED');
   }
 
-  if (!user.clinics || user.clinics.length === 0) {
+  // SUPER_ADMIN tiene scope a nivel organizacion y no requiere clinic asignada.
+  // Para ADMIN / VET / USER seguimos exigiendo al menos una clinic.
+  const hasClinic = user.clinics && user.clinics.length > 0;
+  if (!hasClinic && user.role !== ROLES.SUPER_ADMIN) {
     // Coherente con auth.service.login que lanza 403 NO_CLINIC.
     throw new AppError('User has no clinic assigned', 403, 'NO_CLINIC_ASSIGNED');
   }
@@ -63,7 +66,9 @@ const decodeAndAttach = async (req, token) => {
     email: user.email,
     organizationId: user.organizationId,
     role: user.role || ROLES.USER,
-    clinicId: user.clinics[0].id,
+    // clinicId puede ser undefined para SUPER_ADMIN sin clinics.
+    // Las queries a nivel organizacion usan organizationId en su lugar.
+    clinicId: hasClinic ? user.clinics[0].id : null,
   };
 };
 
@@ -108,4 +113,3 @@ const optionalAuthMiddleware = async (req, res, next) => {
 };
 
 module.exports = { authMiddleware, optionalAuthMiddleware };
-
