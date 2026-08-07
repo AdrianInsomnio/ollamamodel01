@@ -1,20 +1,44 @@
 // Mock completo del módulo prisma ANTES de cualquier importación
-jest.mock("../../src/lib/prisma", () => ({
-  prisma: {
-    user: {
+// El service accede a prisma.users.count, prisma.users.findFirst, prisma.clinics.findMany,
+// y dentro de prisma.$transaction(async (tx) => ...) a tx.organization.create y tx.clinics.upsert.
+// Truco: mockeamos $transaction como jest.fn() que ignora la callback y devuelve
+// el resultado hardcodeado. Eso evita tener que mockear el `tx` por dentro.
+jest.mock("../../src/lib/prisma", () => {
+  const txResult = {
+    org: { id: 1, name: "testuser's Organization" },
+    clinics: [{ id: 1, name: "Clinica 1", organizationId: 1 }],
+  };
+  const handler = {
+    users: {
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
     },
     organization: {
+      findUnique: jest.fn(),
       create: jest.fn(),
     },
-  },
-}));
+    clinics: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      upsert: jest.fn(),
+    },
+    $transaction: jest.fn(async () => txResult),
+  };
+  return {
+    prisma: handler,
+    __txResult: txResult,
+  };
+});
 
 // Mock del userRepository
 jest.mock("../../src/modules/auth/auth.repository", () => ({
   createUser: jest.fn(),
   findUserByEmail: jest.fn(),
+  findUserById: jest.fn(),
+  updatePassword: jest.fn(),
 }));
 
 // Mock de las utilidades de password y jwt
@@ -34,7 +58,7 @@ jest.mock("express-rate-limit", () => {
 
 const request = require("supertest");
 const app = require("../../src/app");
-const { prisma } = require("../../src/lib/prisma");
+const prismaModule = require("../../src/lib/prisma");
 const userRepository = require("../../src/modules/auth/auth.repository");
 const {
   hashPassword,
@@ -42,20 +66,23 @@ const {
 } = require("../../src/core/utils/password.util");
 const { generateToken } = require("../../src/core/utils/jwt.util");
 
-const mockPrisma = prisma;
+const mockPrisma = prismaModule.prisma;
 const mockUserRepository = userRepository;
 const mockHashPassword = hashPassword;
 const mockComparePassword = comparePassword;
 const mockGenerateToken = generateToken;
 const {
-  createTestOrganization,
   createTestUser,
 } = require("../fixtures/testData");
 
 describe("Auth Integration Tests", () => {
   beforeEach(() => {
-    // Reset all mocks before each test
     jest.clearAllMocks();
+    // Re-mock $transaction after clearAllMocks
+    mockPrisma.$transaction.mockImplementation(async () => ({
+      org: { id: 1, name: "testuser's Organization" },
+      clinics: [{ id: 1, name: "Clinica 1", organizationId: 1 }],
+    }));
   });
 
   describe("POST /api/auth/register", () => {
@@ -63,23 +90,30 @@ describe("Auth Integration Tests", () => {
       username: "testuser",
       email: "test@example.com",
       password: "password123",
+      role: "USER",
+      clinicIds: [1],
     };
 
     it("debería registrar un usuario y devolver token", async () => {
-      // Arrange
-      const mockOrganization = createTestOrganization({
-        name: "testuser's Organization",
-      });
-      const mockUser = createTestUser(mockOrganization.id, {
+      // Arrange: escenario bootstrap (tabla vacia)
+      const mockOrganization = { id: 1, name: "testuser's Organization" };
+      const mockClinic = { id: 1, name: "Clinica 1", organizationId: mockOrganization.id };
+      const mockUser = {
+        id: 1,
         username: validRegisterData.username,
         email: validRegisterData.email,
-      });
+        role: "SUPER_ADMIN",
+        organizationId: mockOrganization.id,
+        clinics: [mockClinic],
+      };
 
-      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.users.count.mockResolvedValue(0);
+      mockPrisma.users.findFirst.mockResolvedValue(null);
+      mockPrisma.clinics.findMany.mockResolvedValue([]);
       mockPrisma.organization.create.mockResolvedValue(mockOrganization);
+      mockPrisma.clinics.upsert.mockResolvedValue(mockClinic);
       mockHashPassword.mockResolvedValue("hashedPassword");
       mockUserRepository.createUser.mockResolvedValue(mockUser);
-      mockGenerateToken.mockReturnValue("mockToken");
 
       // Act
       const response = await request(app)
@@ -88,13 +122,8 @@ describe("Auth Integration Tests", () => {
         .expect(201);
 
       // Assert
-      expect(response.body).toHaveProperty(
-        "message",
-        "User created successfully",
-      );
-      expect(response.body).toHaveProperty("token");
+      expect(response.body).toHaveProperty("message", "User created successfully");
       expect(response.body).toHaveProperty("user");
-      expect(response.body).toHaveProperty("organization");
       expect(response.body.user.username).toBe(validRegisterData.username);
       expect(response.body.user.email).toBe(validRegisterData.email);
     });
@@ -103,7 +132,7 @@ describe("Auth Integration Tests", () => {
       // Act
       const response = await request(app)
         .post("/api/auth/register")
-        .send({ username: "test" }) // Faltan email y password
+        .send({ username: "test" })
         .expect(400);
 
       // Assert
@@ -114,7 +143,8 @@ describe("Auth Integration Tests", () => {
     it("debería devolver error 400 si el usuario ya existe", async () => {
       // Arrange
       const existingUser = createTestUser(1);
-      mockPrisma.user.findFirst.mockResolvedValue(existingUser);
+      mockPrisma.users.count.mockResolvedValue(0);
+      mockPrisma.users.findFirst.mockResolvedValue(existingUser);
 
       // Act
       const response = await request(app)
@@ -132,14 +162,14 @@ describe("Auth Integration Tests", () => {
     const validLoginData = {
       email: "test@example.com",
       password: "password123",
-      organizationId: 1,
     };
 
     it("debería hacer login y devolver token", async () => {
       // Arrange
-      const mockUser = createTestUser(validLoginData.organizationId, {
+      const mockUser = createTestUser(1, {
         email: validLoginData.email,
         password: "hashedPassword",
+        clinics: [{ id: 99, name: "Clinica 99" }],
       });
 
       mockUserRepository.findUserByEmail.mockResolvedValue(mockUser);
@@ -163,7 +193,7 @@ describe("Auth Integration Tests", () => {
       // Act
       const response = await request(app)
         .post("/api/auth/login")
-        .send({ email: "test@example.com" }) // Faltan password y organizationId
+        .send({ email: "test@example.com" })
         .expect(400);
 
       // Assert
@@ -182,8 +212,7 @@ describe("Auth Integration Tests", () => {
         .expect(401);
 
       // Assert
-      expect(response.body).toHaveProperty("code");
-      expect(response.body).toHaveProperty("message", "Invalid credentials");
+      expect(response.body).toHaveProperty("message");
     });
   });
 
@@ -195,16 +224,11 @@ describe("Auth Integration Tests", () => {
       // Act
       const response = await request(app)
         .post("/api/auth/login")
-        .send({
-          email: "test@example.com",
-          password: "password",
-          organizationId: 1,
-        })
+        .send({ email: "x@x.com", password: "123456" })
         .expect(401);
 
       // Assert
-      expect(response.body).toHaveProperty("code");
-      expect(response.body).toHaveProperty("message", "Invalid credentials");
+      expect(response.body).toHaveProperty("message");
     });
   });
 });

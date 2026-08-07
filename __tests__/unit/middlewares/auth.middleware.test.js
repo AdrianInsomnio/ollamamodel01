@@ -1,11 +1,14 @@
-﻿const env = require('../../../src/config/env');
+const env = require('../../../src/config/env');
 const jwt = require('../../../src/core/utils/jwt.util');
-const prisma = require('../../../src/lib/prisma');
 const { authMiddleware, optionalAuthMiddleware } = require('../../../src/core/middlewares/auth.middleware');
 
+// Mock prisma.users (plural) - el middleware real ahora usa prisma.users
 jest.mock('../../../src/lib/prisma', () => ({
-  prisma: { user: { findUnique: jest.fn() } },
+  prisma: { users: { findUnique: jest.fn() } },
 }));
+
+const prisma = require('../../../src/lib/prisma');
+const mockPrismaUser = prisma.prisma.users;
 
 const mockRes = () => ({
   statusCode: 200,
@@ -27,7 +30,6 @@ const userFor = (id, overrides = {}) => ({
 describe('auth.middleware', () => {
   const originalViaCookie = env.env.authViaCookie;
   const originalCookieName = env.env.authCookieName;
-  const mockPrismaUser = prisma.prisma.user;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -43,7 +45,7 @@ describe('auth.middleware', () => {
   describe('modo legacy (viaCookie=false)', () => {
     it('deberia autenticar con Authorization Bearer', async () => {
       mockPrismaUser.findUnique.mockResolvedValueOnce(userFor(1, { role: 'ADMIN' }));
-      const token = jwt.generateToken({ id: 1, username: 'u', email: 'e', organizationId: 1, role: 'ADMIN' });
+      const token = jwt.generateToken({ id: 1, username: 'u', email: 'e', organizationId: 1, role: 'ADMIN', clinicId: 99 });
       const req = { headers: { authorization: `Bearer ${token}` } };
       const res = mockRes();
       let nextCalled = false;
@@ -73,7 +75,7 @@ describe('auth.middleware', () => {
 
     it('deberia autenticar leyendo el cookie', async () => {
       mockPrismaUser.findUnique.mockResolvedValueOnce(userFor(2, { role: 'VET' }));
-      const token = jwt.generateToken({ id: 2, username: 'u2', email: 'e2', organizationId: 1, role: 'VET' });
+      const token = jwt.generateToken({ id: 2, username: 'u2', email: 'e2', organizationId: 1, role: 'VET', clinicId: 99 });
       const req = { headers: { cookie: `${env.env.authCookieName}=${token}` } };
       const res = mockRes();
       let nextCalled = false;
@@ -85,7 +87,7 @@ describe('auth.middleware', () => {
 
     it('deberia autenticar con cookie aunque venga Authorization header', async () => {
       mockPrismaUser.findUnique.mockResolvedValueOnce(userFor(3, { role: 'ADMIN' }));
-      const token = jwt.generateToken({ id: 3, username: 'u3', email: 'e3', organizationId: 1, role: 'ADMIN' });
+      const token = jwt.generateToken({ id: 3, username: 'u3', email: 'e3', organizationId: 1, role: 'ADMIN', clinicId: 99 });
       const req = {
         headers: {
           authorization: `Bearer ${token}`,
@@ -117,7 +119,7 @@ describe('auth.middleware', () => {
     it('deberia responder 403 cuando el usuario no tiene clinica', async () => {
       env.env.authViaCookie = false;
       mockPrismaUser.findUnique.mockResolvedValueOnce(userFor(4, { clinics: [] }));
-      const token = jwt.generateToken({ id: 4, username: 'u4', email: 'e4', organizationId: 1, role: 'USER' });
+      const token = jwt.generateToken({ id: 4, username: 'u4', email: 'e4', organizationId: 1, role: 'USER', clinicId: 99 });
       const req = { headers: { authorization: `Bearer ${token}` } };
       const res = mockRes();
       let nextCalled = false;
@@ -142,7 +144,7 @@ describe('auth.middleware', () => {
     it('deberia autenticar si el header es valido', async () => {
       env.env.authViaCookie = false;
       mockPrismaUser.findUnique.mockResolvedValueOnce(userFor(5));
-      const token = jwt.generateToken({ id: 5, username: 'u5', email: 'e5', organizationId: 1, role: 'USER' });
+      const token = jwt.generateToken({ id: 5, username: 'u5', email: 'e5', organizationId: 1, role: 'USER', clinicId: 99 });
       const req = { headers: { authorization: `Bearer ${token}` } };
       const res = mockRes();
       let nextCalled = false;
