@@ -206,8 +206,8 @@ const bootstrapSuperAdmin = async ({
         role: ROLES.SUPER_ADMIN,
         organizationId: organization.id,
         passwordChangedAt: now,
-        created_at: now,
-        updated_at: now,
+        createdAt: now,
+        updatedAt: now,
         clinics: {
           connect: [{ id: clinic.id }],
         },
@@ -285,4 +285,9 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
 };
 
 module.exports = { register, bootstrapSuperAdmin, login, changePassword };
+
+
+
+
+
 

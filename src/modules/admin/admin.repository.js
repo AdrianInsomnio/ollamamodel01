@@ -124,7 +124,7 @@ const findUsersWithMetrics = async (organizationId) => {
       role: true,
       isActive: true,
       lastLogin: true,
-      created_at: true,
+      createdAt: true,
       clinics: { select: { id: true, name: true } },
     },
   });
@@ -176,4 +176,6 @@ module.exports = {
   createUser,
   updateUserClinics,
 };
+
+
 

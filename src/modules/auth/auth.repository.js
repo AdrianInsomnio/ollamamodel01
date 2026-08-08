@@ -91,7 +91,7 @@ const updatePassword = async (id, hashedPassword, passwordChangedAt = new Date()
     data: {
       password: hashedPassword,
       passwordChangedAt,
-      updated_at: new Date(),
+      updatedAt: new Date(),
     },
     select: {
       id: true,

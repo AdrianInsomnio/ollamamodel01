@@ -13,7 +13,7 @@ const findUserById = async (id, clinicId) => {
       email: true,
       role: true,
       organizationId: true,
-      created_at: true,
+      createdAt: true,
       clinics: { select: { id: true, name: true } },
     },
   });
@@ -35,7 +35,7 @@ const getAllUsers = async (clinicId, organizationId) => {
       email: true,
       role: true,
       organizationId: true,
-      created_at: true,
+      createdAt: true,
       clinics: { select: { id: true, name: true } },
     },
   });
@@ -45,4 +45,3 @@ module.exports = {
   findUserById,
   getAllUsers
 };
-
