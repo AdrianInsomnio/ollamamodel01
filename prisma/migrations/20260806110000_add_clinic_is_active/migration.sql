@@ -1,2 +1,0 @@
-ALTER TABLE `clinics`
-  ADD COLUMN `isActive` BOOLEAN NOT NULL DEFAULT true;

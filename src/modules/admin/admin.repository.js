@@ -30,9 +30,9 @@ const getDayRangeInTimezone = (timezone) => {
 /**
  * Lista las clinicas de una organizacion.
  * Mantenemos el contrato del modelo actual donde clinic.id == organization.id
- * para no introducir cambios de schema en T2; el caller sabe que la `id`
- * retornada representa el `clinicId` (que coincide numericamente con el
- * `organizationId`).
+ * para no introducir cambios de schema en T2; el caller sabe que la \id\
+ * retornada representa el \clinicId\ (que coincide numericamente con el
+ * \organizationId\).
  */
 const findClinicsByOrganization = async (organizationId) => {
   const org = await prisma.organization.findUnique({
@@ -57,8 +57,10 @@ const findClinicsWithMetrics = async (organizationId, timezone) => {
 
 /**
  * Calcula metricas para una clinica en un rango de fechas.
- * Filtra por `clinicId` (no por `organizationId`).
- * @param {number} clinicId
+ * NOTA: Los modelos actuales no tienen campo \clinicId\, solo \organizationId\.
+ * Como el "clinic" fake usa el mismo ID numerico que la organization,
+ * filtramos por \organizationId\ que es lo que existe en el schema.
+ * @param {number} clinicId (equivale a organizationId en el modelo actual)
  * @param {Date} start
  * @param {Date} end
  */
@@ -66,28 +68,28 @@ const getClinicMetrics = async (clinicId, start, end) => {
   const cId = Number(clinicId);
 
   const openConsultations = await prisma.consultation.count({
-    where: { clinicId: cId, status: 'OPEN' },
+    where: { organizationId: cId, status: 'OPEN' },
   });
 
   const closedConsultationsToday = await prisma.consultation.count({
     where: {
-      clinicId: cId,
+      organizationId: cId,
       status: 'CLOSED',
       closedAt: { gte: start, lt: end },
     },
   });
 
   const activeClients = await prisma.client.count({
-    where: { clinicId: cId, isActive: true },
+    where: { organizationId: cId, isActive: true },
   });
 
   const activePets = await prisma.pet.count({
-    where: { client: { clinicId: cId, isActive: true } },
+    where: { organizationId: cId, isActive: true },
   });
 
   const salesResult = await prisma.sale.aggregate({
     where: {
-      clinicId: cId,
+      organizationId: cId,
       status: 'completed',
       createdAt: { gte: start, lt: end },
     },
@@ -176,6 +178,3 @@ module.exports = {
   createUser,
   updateUserClinics,
 };
-
-
-
