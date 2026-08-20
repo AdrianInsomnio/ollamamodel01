@@ -22,7 +22,7 @@ model Clinic {
   isDefault      Boolean        @default(false)
   organizationId Int
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @default(now()) @updatedAt
+  updatedAt      DateTime       @updatedAt
   isActive       Boolean        @default(true)
   timezone       String?        @default("America/Montevideo")
   appointments   Appointment[]
@@ -179,7 +179,7 @@ model Appointment {
   clientId     Int
   petId        Int
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   clinicId     Int
   client       Client        @relation(fields: [clientId], references: [id], map: "Appointment_clientId_fkey")
   clinic       Clinic        @relation(fields: [clinicId], references: [id], map: "Appointment_clinicId_fkey")
@@ -217,7 +217,7 @@ model Client {
   notes               String?
   isActive            Boolean              @default(true)
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   clinicId            Int
   appointments        Appointment[]
   clinic              Clinic               @relation(fields: [clinicId], references: [id])
@@ -240,7 +240,7 @@ model ClientSubscription {
   endDate       DateTime?
   status        String      @default("ACTIVE")
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   client        Client      @relation(fields: [clientId], references: [id])
   medicalPlan   MedicalPlan @relation(fields: [medicalPlanId], references: [id])
   pet           Pet?        @relation(fields: [petId], references: [id])
@@ -266,7 +266,7 @@ model Consultation {
   status          String           @default("OPEN")
   closedAt        DateTime?
   createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   clinicId        Int
   appointment     Appointment?     @relation(fields: [appointmentId], references: [id], map: "Consultation_appointmentId_fkey")
   client          Client           @relation(fields: [clientId], references: [id], map: "Consultation_clientId_fkey")
@@ -356,7 +356,7 @@ model MedicalPlan {
   benefits            Json
   isActive            Boolean              @default(true)
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   clinicId            Int
   clientSubscriptions ClientSubscription[]
   clinic              Clinic               @relation(fields: [clinicId], references: [id])
@@ -374,7 +374,7 @@ model Organization {
   taxId         String?
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   timezone      String?        @default("UTC")
   clinics       Clinic[]
   subscriptions Subscription[]
@@ -412,7 +412,7 @@ model Pet {
   notes               String?
   clientId            Int
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   birthDateEstimated  Boolean?             @default(false)
   deathDate           DateTime?
   appointments        Appointment[]
