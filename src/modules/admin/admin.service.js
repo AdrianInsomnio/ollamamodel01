@@ -1,7 +1,7 @@
-﻿const { prisma } = require('../../lib/prisma');
-const repository = require('./admin.repository');
-const { AppError } = require('../../core/errors/AppError');
-const { ROLES } = require('../../core/constants/roles');
+﻿const { prisma } = require("../../lib/prisma");
+const repository = require("./admin.repository");
+const { AppError } = require("../../core/errors/AppError");
+const { ROLES } = require("../../core/constants/roles");
 
 const emptyTotals = () => ({
   salesTodayTotal: 0,
@@ -15,10 +15,10 @@ const emptyTotals = () => ({
 });
 
 const toTotals = (metrics, clinicsCount) => ({
-  salesTodayTotal: metrics.salesToday.total,
-  salesTodayTax: metrics.salesToday.tax,
-  salesTodaySubtotal: metrics.salesToday.subtotal,
-  salesTodayCount: metrics.salesToday.count,
+  salesTodayTotal: metrics.today.total,
+  salesTodayTax: metrics.today.tax,
+  salesTodaySubtotal: metrics.today.subtotal,
+  salesTodayCount: metrics.today.count,
   openConsultations: metrics.openConsultations,
   closedConsultationsToday: metrics.closedConsultationsToday,
   activeClients: metrics.activeClients,
@@ -28,10 +28,10 @@ const toTotals = (metrics, clinicsCount) => ({
 
 const addMetrics = (acc, metrics) => ({
   ...acc,
-  salesTodayTotal: acc.salesTodayTotal + metrics.salesToday.total,
-  salesTodayTax: acc.salesTodayTax + metrics.salesToday.tax,
-  salesTodaySubtotal: acc.salesTodaySubtotal + metrics.salesToday.subtotal,
-  salesTodayCount: acc.salesTodayCount + metrics.salesToday.count,
+  salesTodayTotal: acc.salesTodayTotal + metrics.today.total,
+  salesTodayTax: acc.salesTodayTax + metrics.today.tax,
+  salesTodaySubtotal: acc.salesTodaySubtotal + metrics.today.subtotal,
+  salesTodayCount: acc.salesTodayCount + metrics.today.count,
   openConsultations: acc.openConsultations + metrics.openConsultations,
   closedConsultationsToday: acc.closedConsultationsToday + metrics.closedConsultationsToday,
   activeClients: acc.activeClients + metrics.activeClients,
@@ -39,8 +39,8 @@ const addMetrics = (acc, metrics) => ({
 });
 
 const requireAdminRole = (user) => {
-  if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
-    throw new AppError('Access denied', 403, 'FORBIDDEN');
+  if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
   }
 };
 
@@ -51,7 +51,7 @@ const requireOrganization = async (user) => {
     select: { id: true, name: true, timezone: true },
   });
   if (!organization) {
-    throw new AppError('Organization not found', 404);
+    throw new AppError("Organization not found", 404);
   }
   return organization;
 };
@@ -61,9 +61,9 @@ const requireOrganization = async (user) => {
  *  - ADMIN      -> una sola clinica (la default o la primera activa).
  *  - SUPER_ADMIN -> todas las clinicas de su org.
  *
- * Nota: en el modelo actual, `clinic.id` y `organization.id` coinciden
+ * Nota: en el modelo actual, \clinic.id\ y \organization.id\ coinciden
  * numericamente, por lo que las metricas se siguen agregando a nivel
- * "clinic" (no a nivel "organization" puro). Esto preserva los tests
+ * \clinic\ (no a nivel \organization\ puro). Esto preserva los tests
  * existentes y se revertira cuando el modelo de Clinica se independice.
  */
 const resolveScope = async (user) => {
@@ -73,7 +73,7 @@ const resolveScope = async (user) => {
     select: { id: true, name: true, timezone: true },
   });
   if (!organization) {
-    throw new AppError('Organization not found', 404);
+    throw new AppError("Organization not found", 404);
   }
 
   const clinics = await repository.findClinicsByOrganization(organizationId);
@@ -81,14 +81,14 @@ const resolveScope = async (user) => {
   if (!clinics || clinics.length === 0) {
     return {
       organization,
-      scope: 'organization',
+      scope: "organization",
       clinics: [],
       totals: { ...emptyTotals(), clinicsCount: 0 },
     };
   }
 
-  if (user.role === 'ADMIN') {
-    const clinic = clinics.find(c => c.isDefault) || clinics[0];
+  if (user.role === "ADMIN") {
+    const clinic = clinics.find((c) => c.isDefault) || clinics[0];
     const metrics = await repository.getClinicMetrics(
       clinic.id,
       startOfToday(),
@@ -96,13 +96,13 @@ const resolveScope = async (user) => {
     );
     return {
       organization,
-      scope: 'clinic',
+      scope: "clinic",
       clinics: [{ ...clinic, metrics }],
       totals: toTotals(metrics, 1),
     };
   }
 
-  if (user.role === 'SUPER_ADMIN') {
+  if (user.role === "SUPER_ADMIN") {
     const start = startOfToday();
     const end = endOfToday();
     const clinicsWithMetrics = await Promise.all(
@@ -118,13 +118,13 @@ const resolveScope = async (user) => {
     totals.clinicsCount = clinicsWithMetrics.length;
     return {
       organization,
-      scope: 'organization',
+      scope: "organization",
       clinics: clinicsWithMetrics,
       totals,
     };
   }
 
-  throw new AppError('Access denied for role', 403, 'FORBIDDEN');
+  throw new AppError("Access denied for role", 403, "FORBIDDEN");
 };
 
 const startOfToday = () => {
@@ -160,14 +160,14 @@ const listClinics = async (user) => {
   const organization = await requireOrganization(user);
   const organizationId = organization.id;
 
-  if (user.role === 'ADMIN') {
+  if (user.role === "ADMIN") {
     const allClinics = await repository.findClinicsWithMetrics(
       organizationId,
       organization.timezone
     );
-    const defaultClinic = allClinics.find(c => c.isDefault) || allClinics[0] || null;
+    const defaultClinic = allClinics.find((c) => c.isDefault) || allClinics[0] || null;
     return {
-      scope: 'clinic',
+      scope: "clinic",
       organization: {
         id: organization.id,
         name: organization.name,
@@ -183,7 +183,7 @@ const listClinics = async (user) => {
     organization.timezone
   );
   return {
-    scope: 'organization',
+    scope: "organization",
     organization: {
       id: organization.id,
       name: organization.name,
@@ -195,8 +195,8 @@ const listClinics = async (user) => {
 };
 
 const listUsers = async (user) => {
-  if (user.role !== 'SUPER_ADMIN') {
-    throw new AppError('Access denied', 403, 'FORBIDDEN');
+  if (user.role !== "SUPER_ADMIN") {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
   }
   const organization = await requireOrganization(user);
   const users = await repository.findUsersWithMetrics(organization.id);
@@ -210,11 +210,49 @@ const listUsers = async (user) => {
 const createUser = async (data, actor) => {
   // Only SUPER_ADMIN and ADMIN can create users
   if (![ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(actor.role)) {
-    throw new AppError('Access denied', 403, 'FORBIDDEN');
+    throw new AppError("Access denied", 403, "FORBIDDEN");
   }
   // TODO: For ADMIN, validate that clinicIds belong to their own clinic if needed
   // Pass organizationId from actor to ensure correct org
   return await repository.createUser({ ...data, organizationId: actor.organizationId });
+};
+
+const updateUser = async (id, data, actor) => {
+  // Only SUPER_ADMIN and ADMIN can update users
+  if (![ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(actor.role)) {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
+  }
+  // For ADMIN, validate that user belongs to their organization
+  if (actor.role === "ADMIN") {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: Number(id) },
+      select: { organizationId: true },
+    });
+    if (!existingUser || existingUser.organizationId !== actor.organizationId) {
+      throw new AppError("User not found", 404);
+    }
+  }
+  return await repository.updateUser(id, data);
+};
+
+const deleteUser = async (id, actor) => {
+  // Only SUPER_ADMIN can delete users
+  if (actor.role !== "SUPER_ADMIN") {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
+  }
+  // Validate user exists
+  const existingUser = await prisma.user.findUnique({
+    where: { id: Number(id) },
+    select: { id: true, organizationId: true },
+  });
+  if (!existingUser) {
+    throw new AppError("User not found", 404);
+  }
+  // For SUPER_ADMIN, can delete any user in their organization
+  if (actor.role === "SUPER_ADMIN" && existingUser.organizationId !== actor.organizationId) {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
+  }
+  return await repository.deleteUser(id);
 };
 
 const updateUserClinics = async (userId, clinicIds) => {
@@ -231,4 +269,7 @@ module.exports = {
   listClinics,
   listUsers,
   createUser,
+  updateUser,
+  deleteUser,
+  updateUserClinics,
 };

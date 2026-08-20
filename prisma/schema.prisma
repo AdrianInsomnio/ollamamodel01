@@ -9,9 +9,9 @@ datasource db {
 }
 
 model Clinic {
-  id             Int             @id @default(autoincrement())
+  id             Int            @id @default(autoincrement())
   name           String
-  rut            String?         @unique
+  rut            String?        @unique
   website        String?
   imageUrl       String?
   imagePublicId  String?
@@ -19,23 +19,23 @@ model Clinic {
   address        String?
   phone          String?
   email          String?
-  isDefault      Boolean         @default(false)
+  isDefault      Boolean        @default(false)
   organizationId Int
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @default(now()) @updatedAt
-  isActive       Boolean         @default(true)
-  timezone       String?         @default("America/Montevideo")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+  isActive       Boolean        @default(true)
+  timezone       String?        @default("America/Montevideo")
   appointments   Appointment[]
   attachments    Attachment[]
   clients        Client[]
-  organization   Organization    @relation(fields: [organizationId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
   consultations  Consultation[]
   medicalPlans   MedicalPlan[]
   products       Product[]
   refreshTokens  RefreshToken[]
   sales          Sale[]
   services       Service[]
-  users          User[]          @relation("UserClinics")
+  users          User[]         @relation("UserClinics")
 
   @@index([organizationId], map: "clinics_organizationId_fkey")
   @@map("clinics")
@@ -63,17 +63,17 @@ model User {
 }
 
 model RefreshToken {
-  id             Int      @id @default(autoincrement())
-  token          String   @db.Text
-  userId         Int      @map("user_id")
-  expiresAt      DateTime @map("expires_at")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id             Int          @id @default(autoincrement())
+  token          String       @db.Text
+  userId         Int          @map("user_id")
+  expiresAt      DateTime     @map("expires_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
   role           String
-  clinicId       Int?     @map("clinic_id")
-  clinic         Clinic?  @relation(fields: [clinicId], references: [id])
+  clinicId       Int?         @map("clinic_id")
+  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
   organizationId Int
   organization   Organization @relation(fields: [organizationId], references: [id])
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([clinicId], map: "refresh_tokens_clinic_id_fkey")
   @@index([userId], map: "refresh_tokens_user_id_fkey")
@@ -179,7 +179,7 @@ model Appointment {
   clientId     Int
   petId        Int
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime      @default(now())
   clinicId     Int
   client       Client        @relation(fields: [clientId], references: [id], map: "Appointment_clientId_fkey")
   clinic       Clinic        @relation(fields: [clinicId], references: [id], map: "Appointment_clinicId_fkey")
@@ -206,44 +206,44 @@ model Attachment {
 }
 
 model Client {
-  id                   Int                    @id @default(autoincrement())
-  name                 String
-  documentId           String?                @unique(map: "Client_documentId_key")
-  phone                String?
-  phone2               String?
-  email                String?
-  address              String?
-  birthDate            DateTime?
-  notes                String?
-  isActive             Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  clinicId             Int
-  appointments         Appointment[]
-  clinic               Clinic                 @relation(fields: [clinicId], references: [id])
-  clientSubscriptions  ClientSubscription[]
-  consultations        Consultation[]
-  fiscalDocuments      FiscalDocument[]
-  pets                 Pet[]
-  sales                Sale[]
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  documentId          String?              @unique(map: "Client_documentId_key")
+  phone               String?
+  phone2              String?
+  email               String?
+  address             String?
+  birthDate           DateTime?
+  notes               String?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now())
+  clinicId            Int
+  appointments        Appointment[]
+  clinic              Clinic               @relation(fields: [clinicId], references: [id])
+  clientSubscriptions ClientSubscription[]
+  consultations       Consultation[]
+  fiscalDocuments     FiscalDocument[]
+  pets                Pet[]
+  sales               Sale[]
 
   @@index([clinicId], map: "Client_clinicId_fkey")
   @@map("clients")
 }
 
 model ClientSubscription {
-  id             Int            @id @default(autoincrement())
-  medicalPlanId  Int
-  clientId       Int
-  petId          Int?
-  startDate      DateTime       @default(now())
-  endDate        DateTime?
-  status         String         @default("ACTIVE")
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime
-  client         Client         @relation(fields: [clientId], references: [id])
-  medicalPlan    MedicalPlan    @relation(fields: [medicalPlanId], references: [id])
-  pet            Pet?           @relation(fields: [petId], references: [id])
+  id            Int         @id @default(autoincrement())
+  medicalPlanId Int
+  clientId      Int
+  petId         Int?
+  startDate     DateTime    @default(now())
+  endDate       DateTime?
+  status        String      @default("ACTIVE")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now())
+  client        Client      @relation(fields: [clientId], references: [id])
+  medicalPlan   MedicalPlan @relation(fields: [medicalPlanId], references: [id])
+  pet           Pet?        @relation(fields: [petId], references: [id])
 
   @@index([clientId])
   @@index([medicalPlanId])
@@ -266,7 +266,7 @@ model Consultation {
   status          String           @default("OPEN")
   closedAt        DateTime?
   createdAt       DateTime         @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime         @default(now())
   clinicId        Int
   appointment     Appointment?     @relation(fields: [appointmentId], references: [id], map: "Consultation_appointmentId_fkey")
   client          Client           @relation(fields: [clientId], references: [id], map: "Consultation_clientId_fkey")
@@ -295,25 +295,25 @@ model Diagnosis {
 }
 
 model FiscalDocument {
-  id             String                @id
+  id             String               @id
   type           FiscalDocumentType
   series         String?
   number         Int?
-  issuedAt       DateTime              @default(now())
+  issuedAt       DateTime             @default(now())
   clientId       Int
   consultationId Int?
   subtotal       Decimal
   tax            Decimal
   total          Decimal
-  currency       String                @default("UYU")
+  currency       String               @default("UYU")
   cae            String?
   caeExpiration  DateTime?
   cfeXml         String?
   cfePdfUrl      String?
   status         FiscalDocumentStatus @default(PENDING)
-  createdAt      DateTime              @default(now())
-  client         Client                @relation(fields: [clientId], references: [id], map: "FiscalDocument_clientId_fkey")
-  consultation   Consultation?         @relation(fields: [consultationId], references: [id], map: "FiscalDocument_consultationId_fkey")
+  createdAt      DateTime             @default(now())
+  client         Client               @relation(fields: [clientId], references: [id], map: "FiscalDocument_clientId_fkey")
+  consultation   Consultation?        @relation(fields: [consultationId], references: [id], map: "FiscalDocument_consultationId_fkey")
   fiscalItems    FiscalItem[]
   payments       Payment[]
 
@@ -349,17 +349,17 @@ model IdempotencyKey {
 }
 
 model MedicalPlan {
-  id                   Int                    @id @default(autoincrement())
-  name                 String
-  description          String?
-  price                Float
-  benefits             Json
-  isActive             Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  clinicId             Int
-  clientSubscriptions  ClientSubscription[]
-  clinic               Clinic                 @relation(fields: [clinicId], references: [id])
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  description         String?
+  price               Float
+  benefits            Json
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now())
+  clinicId            Int
+  clientSubscriptions ClientSubscription[]
+  clinic              Clinic               @relation(fields: [clinicId], references: [id])
 
   @@index([clinicId])
   @@map("medical_plans")
@@ -374,7 +374,7 @@ model Organization {
   taxId         String?
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime       @default(now())
   timezone      String?        @default("UTC")
   clinics       Clinic[]
   subscriptions Subscription[]
@@ -400,26 +400,26 @@ model Payment {
 }
 
 model Pet {
-  id                   Int                    @id @default(autoincrement())
-  name                 String
-  species              String
-  breed                String?
-  birthDate            DateTime?
-  weight               Float?
-  color                String?
-  microchip            String?                @unique(map: "Pet_microchip_key")
-  isActive             Boolean                @default(true)
-  notes                String?
-  clientId             Int
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  birthDateEstimated   Boolean?               @default(false)
-  deathDate            DateTime?
-  appointments         Appointment[]
-  clientSubscriptions  ClientSubscription[]
-  consultations        Consultation[]
-  client               Client                 @relation(fields: [clientId], references: [id], map: "Pet_clientId_fkey")
-  sales                Sale[]
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  species             String
+  breed               String?
+  birthDate           DateTime?
+  weight              Float?
+  color               String?
+  microchip           String?              @unique(map: "Pet_microchip_key")
+  isActive            Boolean              @default(true)
+  notes               String?
+  clientId            Int
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now())
+  birthDateEstimated  Boolean?             @default(false)
+  deathDate           DateTime?
+  appointments        Appointment[]
+  clientSubscriptions ClientSubscription[]
+  consultations       Consultation[]
+  client              Client               @relation(fields: [clientId], references: [id], map: "Pet_clientId_fkey")
+  sales               Sale[]
 
   @@index([clientId], map: "Pet_clientId_fkey")
   @@map("pets")

@@ -1,4 +1,4 @@
-const { prisma } = require('../../lib/prisma');
+﻿const { prisma } = require("../../lib/prisma");
 
 const create = async (data, clinicId) => {
   return await prisma.client.create({
@@ -21,7 +21,7 @@ const findAll = async (clinicId) => {
         select: { sales: true, appointments: true }
       }
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: "desc" }
   });
 };
 
@@ -55,8 +55,8 @@ const search = async (query, clinicId) => {
     where: {
       clinicId,
       OR: [
-        { name: { contains: searchQuery, mode: 'insensitive' } },
-        { documentId: { contains: searchQuery, mode: 'insensitive' } },
+        { name: { contains: searchQuery, mode: "insensitive" } },
+        { documentId: { contains: searchQuery, mode: "insensitive" } },
         { phone: { contains: searchQuery } }
       ]
     },
@@ -67,7 +67,7 @@ const search = async (query, clinicId) => {
       }
     },
     take: 20,
-    orderBy: { name: 'asc' }
+    orderBy: { name: "asc" }
   });
 };
 
@@ -96,18 +96,18 @@ const getClientHistory = async (id, clinicId) => {
       pets: {
         include: {
           appointments: {
-            orderBy: { date: 'desc' }
+            orderBy: { date: "desc" }
           },
           consultations: {
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: "desc" }
           }
         }
       },
       sales: {
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" }
       },
       appointments: {
-        orderBy: { date: 'desc' }
+        orderBy: { date: "desc" }
       }
     }
   });
@@ -141,4 +141,3 @@ module.exports = {
   update,
   remove
 };
-

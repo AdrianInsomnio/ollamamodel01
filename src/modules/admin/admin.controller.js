@@ -1,4 +1,4 @@
-﻿const service = require('./admin.service');
+const service = require('./admin.service');
 const { AppError } = require('../../core/errors/AppError');
 
 const getDashboardMetrics = async (req, res, next) => {
@@ -41,6 +41,28 @@ const createUser = async (req, res, next) => {
   }
 };
 
+const updateUser = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const data = await service.updateUser(Number(id), req.body, user);
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteUser = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    await service.deleteUser(Number(id), user);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updateUserClinics = async (req, res, next) => {
   try {
     const user = req.user;
@@ -60,5 +82,7 @@ module.exports = {
   getClinics,
   getUsers,
   createUser,
+  updateUser,
+  deleteUser,
   updateUserClinics,
 };

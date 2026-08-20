@@ -1,13 +1,13 @@
-const Joi = require('joi');
-const { AppError } = require('../../core/errors/AppError');
+ï»¿const Joi = require('joi');
+const { AppError } = require('../../../core/errors/AppError');
 
 /**
- * Middleware de validación Joi
+ * Middleware de validaciÃ³n Joi
  * @param {Object} schema - Objeto Joi con las claves: body, query, params (opcionales)
  * @returns {Function} Middleware Express
  */
 const validate = (schema) => (req, res, next) => {
-  // Construir objeto de validación solo con las claves presentes en schema
+  // Construir objeto de validaciÃ³n solo con las claves presentes en schema
   const validationObj = {};
   if (schema.body) validationObj.body = req.body;
   if (schema.query) validationObj.query = req.query;
@@ -18,7 +18,7 @@ const validate = (schema) => (req, res, next) => {
 
   if (error) {
     const details = error.details.map(detail => detail.message).join(', ');
-    const err = new AppError(`Error de validación: ${details}`, 400, 'VALIDATION_ERROR');
+    const err = new AppError(`Error de validaciÃ³n: ${details}`, 400, 'VALIDATION_ERROR');
     return next(err);
   }
 

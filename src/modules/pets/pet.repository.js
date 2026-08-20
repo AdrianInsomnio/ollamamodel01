@@ -1,5 +1,5 @@
-﻿'use strict';
-const { prisma } = require('../../lib/prisma');
+﻿"use strict";
+const { prisma } = require("../../lib/prisma");
 
 class PetRepository {
   /**
@@ -9,7 +9,7 @@ class PetRepository {
    * @param {number} clinicId
    */
   async create(data, clinicId) {
-    const { clientId, ...rest } = data;
+    const { clientId, clinicId: _clinicId, ...rest } = data;
     return await prisma.pet.create({
       data: {
         ...rest,

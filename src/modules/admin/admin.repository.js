@@ -1,46 +1,31 @@
-const { prisma } = require('../../lib/prisma');
-const { AppError } = require('../../core/errors/AppError');
+﻿const { prisma } = require("../../lib/prisma");
+const { AppError } = require("../../core/errors/AppError");
+const { hashPassword } = require("../../core/utils/password.util");
 
-/**
- * Convert a date to start of day in UTC (assuming input is UTC).
- */
 const startOfDay = (date) => {
   const d = new Date(date);
   d.setUTCHours(0, 0, 0, 0);
   return d;
 };
 
-/**
- * Convert a date to end of day in UTC (exclusive).
- */
 const endOfDay = (date) => {
   const d = new Date(date);
   d.setUTCHours(23, 59, 59, 999);
   return d;
 };
 
-/**
- * Rango [start,end) del dia actual en la TZ indicada (placeholder UTC por ahora).
- */
 const getDayRangeInTimezone = (timezone) => {
   const now = new Date();
   return { start: startOfDay(now), end: endOfDay(now) };
 };
 
-/**
- * Lista las clinicas de una organizacion.
- * Mantenemos el contrato del modelo actual donde clinic.id == organization.id
- * para no introducir cambios de schema en T2; el caller sabe que la \id\
- * retornada representa el \clinicId\ (que coincide numericamente con el
- * \organizationId\).
- */
 const findClinicsByOrganization = async (organizationId) => {
   const org = await prisma.organization.findUnique({
     where: { id: Number(organizationId) },
     select: { id: true, name: true },
   });
   if (!org) {
-    throw new AppError('Organization not found', 404);
+    throw new AppError("Organization not found", 404);
   }
   return [{ id: org.id, name: org.name, isDefault: true }];
 };
@@ -56,41 +41,41 @@ const findClinicsWithMetrics = async (organizationId, timezone) => {
 };
 
 /**
- * Calcula metricas para una clinica en un rango de fechas.
- * NOTA: Los modelos actuales no tienen campo \clinicId\, solo \organizationId\.
- * Como el "clinic" fake usa el mismo ID numerico que la organization,
- * filtramos por \organizationId\ que es lo que existe en el schema.
- * @param {number} clinicId (equivale a organizationId en el modelo actual)
- * @param {Date} start
- * @param {Date} end
+ * Obtiene métricas de una clínica.
+ * Si no hay datos, retorna ceros (el frontend mostrará "Sin Datos para mostrar").
  */
 const getClinicMetrics = async (clinicId, start, end) => {
   const cId = Number(clinicId);
 
+  // Consultas abiertas
   const openConsultations = await prisma.consultation.count({
-    where: { organizationId: cId, status: 'OPEN' },
+    where: { clinicId: cId, status: "OPEN" },
   });
 
+  // Consultas cerradas hoy
   const closedConsultationsToday = await prisma.consultation.count({
     where: {
-      organizationId: cId,
-      status: 'CLOSED',
+      clinicId: cId,
+      status: "CLOSED",
       closedAt: { gte: start, lt: end },
     },
   });
 
+  // Clientes activos (a través de clinicId)
   const activeClients = await prisma.client.count({
-    where: { organizationId: cId, isActive: true },
+    where: { clinicId: cId, isActive: true },
   });
 
+  // Mascotas activas (a través de clinicId en client)
   const activePets = await prisma.pet.count({
-    where: { organizationId: cId, isActive: true },
+    where: { client: { clinicId: cId }, isActive: true },
   });
 
+  // Ventas del día
   const salesResult = await prisma.sale.aggregate({
     where: {
-      organizationId: cId,
-      status: 'completed',
+      clinicId: cId,
+      status: "completed",
       createdAt: { gte: start, lt: end },
     },
     _sum: { total: true, tax: true },
@@ -130,25 +115,29 @@ const findUsersWithMetrics = async (organizationId) => {
       clinics: { select: { id: true, name: true } },
     },
   });
-}
+};
 
 const createUser = async (data) => {
   const { username, email, password, role, isActive, organizationId, clinicIds = [] } = data;
   const orgId = Number(organizationId);
+  
+  // Hash the password before storing
+  const hashedPassword = await hashPassword(password);
+  
   const userData = {
     username,
     email,
-    password,
+    password: hashedPassword,
     role,
     isActive: isActive ?? true,
     organizationId: orgId,
   };
   let user;
   await prisma.$transaction(async (tx) => {
-    user = await tx.users.create({ data: userData });
+    user = await tx.user.create({ data: userData });
     if (clinicIds && clinicIds.length > 0) {
       const clinicIdNumbers = clinicIds.map(Number);
-      await tx.users.update({
+      await tx.user.update({
         where: { id: user.id },
         data: {
           clinics: { connect: clinicIdNumbers.map(id => ({ id })) },
@@ -157,6 +146,40 @@ const createUser = async (data) => {
     }
   });
   return user;
+};
+
+const updateUser = async (id, data) => {
+  const { username, email, role, isActive, password } = data;
+  const updateData = {};
+  if (username !== undefined) updateData.username = username;
+  if (email !== undefined) updateData.email = email;
+  if (role !== undefined) updateData.role = role;
+  if (isActive !== undefined) updateData.isActive = isActive;
+  if (password !== undefined && password !== "") {
+    updateData.password = await hashPassword(password);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: Number(id) },
+    data: updateData,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      isActive: true,
+      lastLogin: true,
+      createdAt: true,
+      clinics: { select: { id: true, name: true } },
+    },
+  });
+  return user;
+};
+
+const deleteUser = async (id) => {
+  await prisma.user.delete({
+    where: { id: Number(id) },
+  });
 };
 
 const updateUserClinics = async (userId, clinicIds) => {
@@ -176,5 +199,7 @@ module.exports = {
   findUsersWithMetrics,
   getDayRangeInTimezone,
   createUser,
+  updateUser,
+  deleteUser,
   updateUserClinics,
 };

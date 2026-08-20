@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../../core/middlewares/auth.middleware');
 const { authorize } = require('../../core/middlewares/authorization.middleware');
@@ -13,8 +13,9 @@ router.get('/clinics', controller.getClinics);
 
 // Listado de usuarios: solo SUPER_ADMIN (el service lo valida igual).
 router.get('/users', controller.getUsers);
-router.post('/', controller.createUser);
+router.post('/users', controller.createUser);
+router.put('/users/:id', controller.updateUser);
+router.delete('/users/:id', controller.deleteUser);
 router.put('/users/:userId/clinics', controller.updateUserClinics);
 
 module.exports = router;
-
