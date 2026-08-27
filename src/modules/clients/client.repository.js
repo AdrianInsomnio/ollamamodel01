@@ -1,4 +1,4 @@
-﻿const { prisma } = require("../../lib/prisma");
+const { prisma } = require("../../lib/prisma");
 
 const create = async (data, clinicId) => {
   return await prisma.client.create({
@@ -55,8 +55,8 @@ const search = async (query, clinicId) => {
     where: {
       clinicId,
       OR: [
-        { name: { contains: searchQuery, mode: "insensitive" } },
-        { documentId: { contains: searchQuery, mode: "insensitive" } },
+        { name: { contains: searchQuery } },
+        { documentId: { contains: searchQuery } },
         { phone: { contains: searchQuery } }
       ]
     },
@@ -141,3 +141,4 @@ module.exports = {
   update,
   remove
 };
+
