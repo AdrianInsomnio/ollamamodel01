@@ -42,6 +42,7 @@ module.exports.env = {
   databaseUrl: value.DATABASE_URL,
   jwtSecret: value.JWT_SECRET,
   jwtExpiresIn: value.JWT_EXPIRES_IN,
+  bootstrapSuperAdminToken: value.BOOTSTRAP_SUPERADMIN_TOKEN || '',
   idempotencyTtl: value.IDEMPOTENCY_TTL_MINUTES,
   logLevel: value.LOG_LEVEL,
   authViaCookie: value.AUTH_VIA_COOKIE,

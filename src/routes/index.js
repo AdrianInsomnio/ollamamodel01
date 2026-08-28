@@ -10,7 +10,8 @@ const saleRoutes = require("../modules/sales/sale.routes");
 const diagnosisRoutes = require("../modules/diagnoses/diagnosis.routes");
 const treatmentRoutes = require("../modules/treatments/treatment.routes");
 const prescriptionRoutes = require("../modules/prescriptions/prescription.routes");
-const superadminRoutes = require("../modules/superadmin/superadmin.routes"); // ← NUEVO
+const superadminRoutes = require("../modules/superadmin/superadmin.routes"); // ←
+const cashRoutes = require("../modules/cash/register/cashregister.routes"); // ← NUEVO
 
 const adminRoutes = require('../modules/admin/admin.routes');
 module.exports = (app) => {
@@ -28,4 +29,5 @@ module.exports = (app) => {
   app.use("/api/prescriptions", prescriptionRoutes);
   app.use("/api/superadmin", superadminRoutes); // ← NUEVO
   app.use('/api/admin', adminRoutes);
+  app.use('/api/cash', cashRoutes); // ← NUEVO
 };
