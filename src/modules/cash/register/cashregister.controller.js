@@ -209,6 +209,31 @@ const createAdminAdjustment = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getAdminRegisters = async (req, res, next) => {
+  try {
+    const active = req.query.status === undefined ? undefined : req.query.status === "active";
+    if (req.query.status !== undefined && !["active", "disabled", "all"].includes(req.query.status)) return res.status(422).json({ code: "INVALID_STATUS", message: "Estado inválido" });
+    const registers = await cashRegisterService.getAdminRegisters(req.user.clinicId, active === undefined || req.query.status === "all" ? undefined : active);
+    res.json({ success: true, data: registers });
+  } catch (error) { next(error); }
+};
+
+const getAdminRegister = async (req, res, next) => {
+  try { res.json({ success: true, data: await cashRegisterService.getAdminRegister(Number(req.params.id), req.user.clinicId) }); } catch (error) { next(error); }
+};
+
+const createAdminRegister = async (req, res, next) => {
+  try { res.status(201).json({ success: true, data: await cashRegisterService.createAdminRegister({ ...req.body, clinicId: req.user.clinicId }) }); } catch (error) { next(error); }
+};
+
+const updateAdminRegister = async (req, res, next) => {
+  try { res.json({ success: true, data: await cashRegisterService.updateAdminRegister(Number(req.params.id), req.user.clinicId, req.body) }); } catch (error) { next(error); }
+};
+
+const updateAdminRegisterStatus = async (req, res, next) => {
+  try { res.json({ success: true, data: await cashRegisterService.updateAdminRegisterStatus(Number(req.params.id), req.user.clinicId, req.body.isActive) }); } catch (error) { next(error); }
+};
+
 /**
  * POST /cash-registers/shifts/:shiftId/movements
  */
@@ -304,6 +329,11 @@ module.exports = {
   getAdminShift,
   getAdminMovements,
   createAdminAdjustment,
+  getAdminRegisters,
+  getAdminRegister,
+  createAdminRegister,
+  updateAdminRegister,
+  updateAdminRegisterStatus,
   createMovement,
   closeShift,
 };

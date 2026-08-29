@@ -322,6 +322,44 @@ const adminMovements = async (clinicId, filters) => {
 
 const createAdminAdjustment = (data) => prisma.cashMovement.create({ data });
 
+const findAdminRegisters = async (clinicId, isActive) => {
+  const where = { clinicId };
+  if (isActive !== undefined) where.isActive = isActive;
+  return prisma.cashRegister.findMany({
+    where,
+    orderBy: { name: "asc" },
+    include: {
+      shifts: {
+        orderBy: { openedAt: "desc" },
+        take: 1,
+        include: { user: { select: { id: true, username: true, email: true } } },
+      },
+    },
+  });
+};
+
+const findAdminRegisterById = (id, clinicId) => prisma.cashRegister.findFirst({
+  where: { id, clinicId },
+  include: {
+    clinic: true,
+    shifts: {
+      orderBy: { openedAt: "desc" },
+      take: 10,
+      include: { user: { select: { id: true, username: true, email: true, role: true } }, movements: true, payments: true },
+    },
+  },
+});
+
+const updateAdminRegister = (id, clinicId, data) => prisma.cashRegister.updateMany({
+  where: { id, clinicId },
+  data,
+});
+
+const updateAdminRegisterStatus = (id, clinicId, isActive) => prisma.cashRegister.updateMany({
+  where: { id, clinicId },
+  data: { isActive },
+});
+
 module.exports = {
   findRegistersByClinic,
   findRegisterById,
@@ -344,4 +382,8 @@ module.exports = {
   adminShiftById,
   adminMovements,
   createAdminAdjustment,
+  findAdminRegisters,
+  findAdminRegisterById,
+  updateAdminRegister,
+  updateAdminRegisterStatus,
 };

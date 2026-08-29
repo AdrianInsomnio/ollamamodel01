@@ -183,6 +183,36 @@ const createAdminAdjustment = async ({ id, clinicId, userId, amount, reason, not
   });
 };
 
+const getAdminRegisters = (clinicId, isActive) => repository.findAdminRegisters(clinicId, isActive);
+
+const getAdminRegister = async (id, clinicId) => {
+  const register = await repository.findAdminRegisterById(id, clinicId);
+  if (!register) throw new AppError("Caja no encontrada", 404);
+  return register;
+};
+
+const createAdminRegister = async ({ name, code, clinicId }) => {
+  if (!name || !String(name).trim()) throw new AppError("El nombre de la caja es obligatorio", 422);
+  return createRegister({ name: String(name).trim(), code: code ? String(code).trim() : null, clinicId });
+};
+
+const updateAdminRegister = async (id, clinicId, { name, code }) => {
+  await getAdminRegister(id, clinicId);
+  if (!name || !String(name).trim()) throw new AppError("El nombre de la caja es obligatorio", 422);
+  await repository.updateAdminRegister(id, clinicId, { name: String(name).trim(), code: code ? String(code).trim() : null });
+  return getAdminRegister(id, clinicId);
+};
+
+const updateAdminRegisterStatus = async (id, clinicId, isActive) => {
+  const register = await getAdminRegister(id, clinicId);
+  if (typeof isActive !== "boolean") throw new AppError("isActive debe ser booleano", 422);
+  if (!isActive && register.shifts.some((shift) => shift.status === "OPEN")) {
+    throw new AppError("No se puede deshabilitar una caja con un turno abierto", 409);
+  }
+  await repository.updateAdminRegisterStatus(id, clinicId, isActive);
+  return getAdminRegister(id, clinicId);
+};
+
 /**
  * ============================
  * CASH MOVEMENT
@@ -303,4 +333,9 @@ module.exports = {
   getAdminShift,
   getAdminMovements,
   createAdminAdjustment,
+  getAdminRegisters,
+  getAdminRegister,
+  createAdminRegister,
+  updateAdminRegister,
+  updateAdminRegisterStatus,
 };

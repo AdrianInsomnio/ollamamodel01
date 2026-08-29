@@ -2,7 +2,7 @@
 
 const express = require("express");
 
-const { getRegister, getRegisters, createRegister, updateRegister, openShift, getCurrentShift, getShift, getMovements, createMovement, closeShift, getAdminSummary, getAdminShifts, getAdminShift, getAdminMovements, createAdminAdjustment } = require("./cashregister.controller");
+const { getRegister, getRegisters, createRegister, updateRegister, openShift, getCurrentShift, getShift, getMovements, createMovement, closeShift, getAdminSummary, getAdminShifts, getAdminShift, getAdminMovements, createAdminAdjustment, getAdminRegisters, getAdminRegister, createAdminRegister, updateAdminRegister, updateAdminRegisterStatus } = require("./cashregister.controller");
 
 const { authMiddleware, authorize } = require('../../../core/middlewares');
 const { ROLES } = require('../../../core/constants/roles');
@@ -21,6 +21,11 @@ router.get("/admin/shifts", adminOnly, getAdminShifts);
 router.get("/admin/shifts/:id", adminOnly, getAdminShift);
 router.get("/admin/movements", adminOnly, getAdminMovements);
 router.post("/admin/shifts/:id/adjustment", adminOnly, createAdminAdjustment);
+router.get("/admin/registers", adminOnly, getAdminRegisters);
+router.get("/admin/registers/:id", adminOnly, getAdminRegister);
+router.post("/admin/registers", adminOnly, createAdminRegister);
+router.patch("/admin/registers/:id", adminOnly, updateAdminRegister);
+router.patch("/admin/registers/:id/status", adminOnly, updateAdminRegisterStatus);
 
 /**
  * ============================
