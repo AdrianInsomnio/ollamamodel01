@@ -14,6 +14,8 @@ const superadminRoutes = require("../modules/superadmin/superadmin.routes"); // 
 const cashRoutes = require("../modules/cash/register/cashregister.routes"); // ← NUEVO
 
 const adminRoutes = require('../modules/admin/admin.routes');
+const consultorioRoutes = require('../modules/consultorios/consultorio.routes');
+const equipmentRoutes = require('../modules/equipment/equipment.routes');
 module.exports = (app) => {
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
@@ -30,4 +32,6 @@ module.exports = (app) => {
   app.use("/api/superadmin", superadminRoutes); // ← NUEVO
   app.use('/api/admin', adminRoutes);
   app.use('/api/cash', cashRoutes); // ← NUEVO
+  app.use('/api/consultorios', consultorioRoutes);
+  app.use('/api/equipment', equipmentRoutes);
 };

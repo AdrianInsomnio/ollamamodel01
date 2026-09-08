@@ -99,6 +99,30 @@ const close = async (req, res, next) => {
   }
 };
 
+const assignConsultorio = async (req, res, next) => {
+  try {
+    const item = await service.assignConsultorio(
+      Number(req.params.id),
+      req.user.clinicId,
+      req.body.consultorioId,
+      req.body.startAt,
+      req.body.endAt
+    );
+    res.json({ consultation: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const releaseConsultorio = async (req, res, next) => {
+  try {
+    const item = await service.releaseConsultorio(Number(req.params.id), req.user.clinicId);
+    res.json({ consultation: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getAll,
@@ -110,5 +134,7 @@ module.exports = {
   addDiagnosis,
   addTreatment,
   addPrescription,
-  close
+  close,
+  assignConsultorio,
+  releaseConsultorio
 };

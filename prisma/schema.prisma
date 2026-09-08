@@ -41,6 +41,9 @@ model Clinic {
   cashShifts    CashShift[]
   cashMovements CashMovement[]
 
+  consultorios Consultorio[]
+  equipment    Equipment[]
+
   @@index([organizationId], map: "clinics_organizationId_fkey")
   @@map("clinics")
 }
@@ -285,7 +288,17 @@ model Consultation {
   prescriptions   Prescription[]
   sales           Sale[]
   treatments      Treatment[]
-priority PriorityConsultation @default(NORMAL)
+
+  consultorioId Int?
+  startAt       DateTime?
+  endAt         DateTime?
+
+  consultorio Consultorio? @relation(fields: [consultorioId], references: [id])
+
+  priority PriorityConsultation @default(NORMAL)
+
+  @@index([consultorioId])
+  @@index([consultorioId, startAt, endAt])
   @@index([clientId], map: "Consultation_clientId_fkey")
   @@index([clinicId], map: "Consultation_clinicId_fkey")
   @@index([petId], map: "Consultation_petId_fkey")
@@ -662,4 +675,84 @@ model CashMovement {
   @@index([userId])
   @@index([type])
   @@map("cash_movements")
+}
+
+model Consultorio {
+  id       Int @id @default(autoincrement())
+  clinicId Int
+
+  name        String
+  description String? @db.Text
+  size        String?
+
+  status ConsultorioStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  equipment     ConsultorioEquipment[]
+  consultations Consultation[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId])
+  @@index([clinicId, status])
+  @@map("consultorios")
+}
+
+model Equipment {
+  id       Int @id @default(autoincrement())
+  clinicId Int
+
+  name        String
+  description String? @db.Text
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  consultorios ConsultorioEquipment[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId])
+  @@map("equipment")
+}
+
+model ConsultorioEquipment {
+  id Int @id @default(autoincrement())
+
+  consultorioId Int
+  equipmentId   Int
+
+  quantity Int             @default(1)
+  status   EquipmentStatus @default(AVAILABLE)
+  notes    String?         @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultorio Consultorio @relation(fields: [consultorioId], references: [id], onDelete: Cascade)
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([consultorioId, equipmentId])
+  @@index([consultorioId])
+  @@index([equipmentId])
+  @@map("consultorio_equipment")
+}
+
+enum ConsultorioStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  MAINTENANCE
+  OUT_OF_SERVICE
 }

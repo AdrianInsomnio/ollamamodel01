@@ -243,6 +243,23 @@ const close = async (id, clinicId, closeData) => {
   };
 };
 
+const assignConsultorio = async (id, clinicId, consultorioId, startAt, endAt) => {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+    throw new AppError('startAt must be before endAt', 400);
+  }
+  const item = await repository.assignConsultorio(id, clinicId, consultorioId, start, end);
+  if (!item) throw new AppError('Consultation not found', 404);
+  return item;
+};
+
+const releaseConsultorio = async (id, clinicId) => {
+  const item = await repository.releaseConsultorio(id, clinicId);
+  if (!item) throw new AppError('Consultation not found', 404);
+  return item;
+};
+
 module.exports = {
   create,
   getAll,
@@ -258,5 +275,7 @@ module.exports = {
   removePrescription,
   update,
   remove,
-  close
+  close,
+  assignConsultorio,
+  releaseConsultorio
 };
