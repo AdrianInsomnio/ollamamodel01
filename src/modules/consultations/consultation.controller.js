@@ -18,6 +18,15 @@ const getAll = async (req, res, next) => {
   }
 };
 
+const getQueue = async (req, res, next) => {
+  try {
+    const items = await service.getQueue(req.user.clinicId);
+    res.json({ consultations: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getById = async (req, res, next) => {
   try {
     const item = await service.getById(parseInt(req.params.id), req.user.clinicId);
@@ -93,6 +102,7 @@ const close = async (req, res, next) => {
 module.exports = {
   create,
   getAll,
+  getQueue,
   getById,
   getPetHistory,
   getClientConsultations,

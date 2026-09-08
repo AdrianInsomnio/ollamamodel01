@@ -7,6 +7,7 @@ const controller = require('./consultation.controller');
 
 router.use(authMiddleware);
 router.post('/', controller.create);
+router.get('/queue', controller.getQueue);
 router.get('/', controller.getAll);
 router.get('/pet/:petId/history', controller.getPetHistory);
 router.get('/client/:clientId', controller.getClientConsultations);

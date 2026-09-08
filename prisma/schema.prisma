@@ -285,7 +285,7 @@ model Consultation {
   prescriptions   Prescription[]
   sales           Sale[]
   treatments      Treatment[]
-
+priority PriorityConsultation @default(NORMAL)
   @@index([clientId], map: "Consultation_clientId_fkey")
   @@index([clinicId], map: "Consultation_clinicId_fkey")
   @@index([petId], map: "Consultation_petId_fkey")
@@ -565,9 +565,9 @@ enum AppointmentStatus {
 }
 
 enum PriorityConsultation {
-  LOW
-  MEDIUM
-  HIGH
+  URGENT
+  SCHEDULED
+  NORMAL
 }
 
 enum CashShiftStatus {

@@ -6,7 +6,7 @@ const create = async (data, clinicId) => {
     data: {
       ...saleData,
       clinicId,
-      items: {
+      saleItems: {
         create: items.map(item => ({
           itemType: item.itemType,
           itemId: item.itemId,
@@ -20,7 +20,7 @@ const create = async (data, clinicId) => {
     include: {
       client: { select: { id: true, name: true } },
       pet: { select: { id: true, name: true } },
-      items: true
+      saleItems: true
     }
   });
 };
@@ -32,7 +32,7 @@ const createWithStockMovements = async (saleData, items, stockMovements, clinicI
       data: {
         ...saleData,
         clinicId,
-        items: {
+        saleItems: {
           create: items.map(item => ({
             itemType: item.itemType,
             itemId: item.itemId,
@@ -46,7 +46,7 @@ const createWithStockMovements = async (saleData, items, stockMovements, clinicI
       include: {
         client: { select: { id: true, name: true } },
         pet: { select: { id: true, name: true } },
-        items: true
+        saleItems: true
       }
     });
 
@@ -81,7 +81,7 @@ const findAll = async (clinicId) => {
     include: {
       client: { select: { id: true, name: true } },
       pet: { select: { id: true, name: true } },
-      items: true
+      saleItems: true
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -94,7 +94,7 @@ const findById = async (id, clinicId) => {
       client: { select: { id: true, name: true } },
       pet: { select: { id: true, name: true } },
       consultation: true,
-      items: true
+      saleItems: true
     }
   });
 };
@@ -103,7 +103,7 @@ const getSalesByClient = async (clientId, clinicId) => {
   return await prisma.sale.findMany({
     where: { clientId, clinicId },
     include: {
-      items: true,
+      saleItems: true,
       pet: { select: { id: true, name: true } }
     },
     orderBy: { createdAt: 'desc' }

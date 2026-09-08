@@ -1,4 +1,5 @@
 const { prisma } = require('../../lib/prisma');
+const { getClinicDayBounds } = require('../../lib/date.util');
 
 const create = async (data, clinicId) => {
   return await prisma.consultation.create({
@@ -29,6 +30,22 @@ const findAll = async (clinicId) => {
       prescriptions: true
     },
     orderBy: { createdAt: 'desc' }
+  });
+};
+
+const findQueue = async (clinicId) => {
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
+  const { startOfDay, endOfDay } = getClinicDayBounds(clinic);
+  const consultations = await prisma.consultation.findMany({
+    where: { clinicId, status: 'OPEN', createdAt: { gte: startOfDay, lt: endOfDay } },
+    include: { pet: true, client: true, appointment: true, diagnoses: true, treatments: true, prescriptions: true },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  const priorityOrder = { URGENT: 0, SCHEDULED: 1, NORMAL: 2 };
+  return consultations.sort((a, b) => {
+    const priorityDiff = (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2);
+    return priorityDiff || new Date(a.createdAt) - new Date(b.createdAt);
   });
 };
 
@@ -121,8 +138,10 @@ const removePrescription = async (prescriptionId) => {
 };
 
 const update = async (id, clinicId, data) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id, clinicId }, select: { id: true } });
+  if (!consultation) return null;
   return await prisma.consultation.update({
-    where: { id, clinicId },
+    where: { id: consultation.id },
     data,
     include: {
       pet: true,
@@ -151,9 +170,15 @@ const remove = async (id, clinicId) => {
   });
 };
 
-const updateStatus = async (id, status, closedAt = null) => {
-  return await prisma.consultation.update({
+const updateStatus = async (id, clinicId, status, closedAt = null) => {
+  const consultation = await prisma.consultation.findFirst({
     where: { id, clinicId },
+    select: { id: true },
+  });
+  if (!consultation) return null;
+
+  return await prisma.consultation.update({
+    where: { id: consultation.id },
     data: {
       status,
       ...(closedAt && { closedAt })
@@ -171,6 +196,7 @@ const updateStatus = async (id, status, closedAt = null) => {
 module.exports = {
   create,
   findAll,
+  findQueue,
   findById,
   findByPetId,
   findByClientId,

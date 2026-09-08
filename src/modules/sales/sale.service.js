@@ -169,7 +169,7 @@ const cancelSale = async (id, clinicId) => {
     });
 
     // Revertir stock para productos
-    for (const item of sale.items) {
+    for (const item of sale.saleItems) {
       if (item.itemType === 'product') {
         await tx.product.update({
           where: { id: item.itemId },

@@ -4,6 +4,7 @@ const clientRepository = require('../clients/client.repository');
 const appointmentRepository = require('../appointments/appointment.repository');
 const saleService = require('../sales/sale.service');
 const { AppError } = require('../../core/errors/AppError');
+const validPriorities = ['URGENT', 'SCHEDULED', 'NORMAL'];
 
 // Validar datos médicos básicos
 const validateMedicalData = (data) => {
@@ -20,6 +21,9 @@ const create = async (data, clinicId) => {
   // Validar campos requeridos
   if (!data.petId || !data.clientId) {
     throw new AppError('Pet and client are required', 400);
+  }
+  if (data.priority !== undefined && !validPriorities.includes(data.priority)) {
+    throw new AppError('Invalid consultation priority', 400);
   }
 
   // Validar que la mascota existe
@@ -63,6 +67,8 @@ const create = async (data, clinicId) => {
 const getAll = async (clinicId) => {
   return await repository.findAll(clinicId);
 };
+
+const getQueue = async (clinicId) => repository.findQueue(clinicId);
 
 const getById = async (id, clinicId) => {
   const item = await repository.findById(id, clinicId);
@@ -135,6 +141,10 @@ const removePrescription = async (prescriptionId) => {
 const update = async (id, clinicId, data) => {
   const consultation = await getById(id, clinicId);
 
+  if (data.priority !== undefined && !validPriorities.includes(data.priority)) {
+    throw new AppError('Invalid consultation priority', 400);
+  }
+
   // Validar datos médicos si se actualizan
   validateMedicalData(data);
 
@@ -193,7 +203,7 @@ const close = async (id, clinicId, closeData) => {
   const sale = await saleService.createSale(saleData, clinicId);
 
   // Cerrar la consulta
-  const closedConsultation = await repository.updateStatus(id, 'CLOSED', new Date());
+  const closedConsultation = await repository.updateStatus(id, clinicId, 'CLOSED', new Date());
 
   // Preparar datos para impresión (ticket 80mm)
   const printData = {
@@ -212,7 +222,7 @@ const close = async (id, clinicId, closeData) => {
       id: consultation.id,
       date: consultation.createdAt
     },
-    items: sale.items.map(item => ({
+    items: sale.saleItems.map(item => ({
       name: item.nameSnapshot,
       quantity: item.quantity,
       price: item.priceSnapshot,
@@ -236,6 +246,7 @@ const close = async (id, clinicId, closeData) => {
 module.exports = {
   create,
   getAll,
+  getQueue,
   getById,
   getPetHistory,
   getClientConsultations,
