@@ -45,4 +45,27 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, remove };
+const updateStatus = async (req, res, next) => {
+  try {
+    const item = await service.update(Number(req.params.id), req.user.clinicId, {
+      isActive: req.body.isActive,
+      ...(req.body.isActive === false ? { discontinuedAt: new Date() } : { discontinuedAt: null }),
+    });
+    res.json({ product: item });
+  } catch (error) { next(error); }
+};
+
+const adjustStock = async (req, res, next) => {
+  try {
+    const item = await service.adjustStock(Number(req.params.id), Number(req.body.quantity), req.body.reason, req.user.clinicId, req.body.notes);
+    res.json(item);
+  } catch (error) { next(error); }
+};
+
+const getStockMovements = async (req, res, next) => {
+  try {
+    res.json({ movements: await service.getStockMovements(Number(req.params.id), req.user.clinicId) });
+  } catch (error) { next(error); }
+};
+
+module.exports = { create, getAll, getById, update, updateStatus, adjustStock, getStockMovements, remove };

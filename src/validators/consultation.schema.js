@@ -11,6 +11,6 @@ const consultorioAssignmentBody = Joi.object({
 }).unknown(false);
 
 module.exports = {
-  assignConsultorioSchema: { body: consultorioAssignmentBody, params: consultationParams },
-  consultationIdSchema: { params: consultationParams },
+  assignConsultorioSchema: consultorioAssignmentBody,
+  consultationIdSchema: consultationParams,
 };

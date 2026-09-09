@@ -3,15 +3,15 @@ const { AppError } = require('../../core/errors/AppError');
 
 const create = async (data, clinicId) => {
   // Validar datos requeridos
-  if (!data.name || !data.price) {
+  if (!data.name || data.price === undefined || data.price === null) {
     throw new AppError('Nombre y precio son requeridos', 400);
   }
 
-  if (data.price <= 0) {
-    throw new AppError('El precio debe ser mayor a 0', 400);
+  if (data.price < 0) {
+    throw new AppError('El precio no puede ser negativo', 400);
   }
 
-  if (data.cost && data.cost < 0) {
+  if (data.cost !== undefined && data.cost !== null && data.cost < 0) {
     throw new AppError('El costo no puede ser negativo', 400);
   }
 
@@ -21,6 +21,11 @@ const create = async (data, clinicId) => {
 
   if (data.minStock < 0) {
     throw new AppError('El stock mínimo no puede ser negativo', 400);
+  }
+
+  if (data.categoryId !== undefined && data.categoryId !== null) {
+    const category = await repository.findCategory(data.categoryId, clinicId);
+    if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
   }
 
   return await repository.create(data, clinicId);
@@ -41,9 +46,14 @@ const getById = async (id, clinicId) => {
 const update = async (id, clinicId, data) => {
   const product = await getById(id, clinicId);
 
+  if (data.categoryId !== undefined && data.categoryId !== null) {
+    const category = await repository.findCategory(data.categoryId, clinicId);
+    if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
+  }
+
   // Validaciones
-  if (data.price !== undefined && data.price <= 0) {
-    throw new AppError('El precio debe ser mayor a 0', 400);
+  if (data.price !== undefined && data.price < 0) {
+    throw new AppError('El precio no puede ser negativo', 400);
   }
 
   if (data.cost !== undefined && data.cost < 0) {

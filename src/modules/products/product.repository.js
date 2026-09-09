@@ -56,6 +56,11 @@ const findByIds = async (ids, clinicId) => {
   });
 };
 
+const findCategory = async (categoryId, clinicId) => prisma.productCategory.findFirst({
+  where: { id: Number(categoryId), clinicId, isActive: true },
+  select: { id: true },
+});
+
 const update = async (id, clinicId, data) => {
   return await prisma.product.update({
     where: { id, clinicId },
@@ -129,6 +134,7 @@ module.exports = {
   findAll,
   findById,
   findByIds,
+  findCategory,
   update,
   remove,
   updateStock,

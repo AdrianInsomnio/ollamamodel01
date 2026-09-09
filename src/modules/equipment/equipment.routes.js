@@ -8,6 +8,6 @@ const schemas = require('../../validators/equipment.schema');
 router.use(authMiddleware);
 router.get('/', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getAll);
 router.post('/', authorize(ROLES.ADMIN), validate(schemas.createEquipmentSchema), controller.create);
-router.patch('/:id', authorize(ROLES.ADMIN), validate(schemas.updateEquipmentSchema), controller.update);
+router.patch('/:id', authorize(ROLES.ADMIN), validate(schemas.equipmentIdSchema, 'params'), validate(schemas.updateEquipmentSchema), controller.update);
 
 module.exports = router;

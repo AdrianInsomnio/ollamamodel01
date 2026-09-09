@@ -45,4 +45,11 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, remove };
+const updateStatus = async (req, res, next) => {
+  try {
+    const item = await service.update(parseInt(req.params.id), req.user.clinicId, { isActive: req.body.isActive });
+    res.json({ service: item });
+  } catch (error) { next(error); }
+};
+
+module.exports = { create, getAll, getById, update, updateStatus, remove };

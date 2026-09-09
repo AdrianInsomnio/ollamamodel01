@@ -16,7 +16,7 @@ const equipmentParams = Joi.object({
 }).unknown(false);
 
 module.exports = {
-  createEquipmentSchema: { body: equipmentBody },
-  updateEquipmentSchema: { body: updateEquipmentBody, params: equipmentParams },
-  equipmentIdSchema: { params: equipmentParams },
+  createEquipmentSchema: equipmentBody,
+  updateEquipmentSchema: updateEquipmentBody,
+  equipmentIdSchema: equipmentParams,
 };

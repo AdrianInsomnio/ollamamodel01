@@ -170,7 +170,7 @@ const remove = async (id, clinicId) => {
 };
 
 const close = async (id, clinicId, closeData) => {
-  const { items, paymentMethod, discount = 0 } = closeData;
+  const { items = [], paymentMethod, discount = 0 } = closeData || {};
 
   // Validar que la consulta existe
   const consultation = await getById(id, clinicId);
@@ -181,32 +181,34 @@ const close = async (id, clinicId, closeData) => {
   }
 
   // Validar items
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new AppError('Items are required', 400);
+  if (!Array.isArray(items)) {
+    throw new AppError('Items must be an array', 400);
   }
 
   // Validar método de pago
-  if (!paymentMethod) {
-    throw new AppError('Payment method is required', 400);
+  let sale = null;
+  if (items.length > 0) {
+    if (!paymentMethod) {
+      throw new AppError('Payment method is required', 400);
+    }
+
+    const saleData = {
+      clientId: consultation.clientId,
+      petId: consultation.petId,
+      consultationId: id,
+      items,
+      discount,
+      paymentMethod
+    };
+
+    sale = await saleService.createSale(saleData, clinicId);
   }
-
-  // Crear la venta usando saleService
-  const saleData = {
-    clientId: consultation.clientId,
-    petId: consultation.petId,
-    consultationId: id,
-    items,
-    discount,
-    paymentMethod
-  };
-
-  const sale = await saleService.createSale(saleData, clinicId);
 
   // Cerrar la consulta
   const closedConsultation = await repository.updateStatus(id, clinicId, 'CLOSED', new Date());
 
   // Preparar datos para impresión (ticket 80mm)
-  const printData = {
+  const printData = sale ? {
     type: 'thermal_80mm',
     client: {
       name: consultation.client.name,
@@ -234,7 +236,7 @@ const close = async (id, clinicId, closeData) => {
     total: sale.total,
     paymentMethod: sale.paymentMethod,
     saleId: sale.id
-  };
+  } : null;
 
   return {
     consultation: closedConsultation,

@@ -44,12 +44,12 @@ const availableQuery = Joi.object({
 }).unknown(false);
 
 module.exports = {
-  createConsultorioSchema: { body: consultorioBody },
-  updateConsultorioSchema: { body: updateConsultorioBody, params: consultorioParams },
-  updateConsultorioStatusSchema: { body: statusBody, params: consultorioParams },
-  consultorioIdSchema: { params: consultorioParams },
-  equipmentAssociationSchema: { body: equipmentAssociationBody, params: consultorioParams },
-  updateEquipmentAssociationSchema: { body: updateEquipmentAssociationBody, params: equipmentAssociationParams },
-  deleteEquipmentAssociationSchema: { params: equipmentAssociationParams },
-  availableConsultoriosSchema: { query: availableQuery },
+  createConsultorioSchema: consultorioBody,
+  updateConsultorioSchema: updateConsultorioBody,
+  updateConsultorioStatusSchema: statusBody,
+  consultorioIdSchema: consultorioParams,
+  equipmentAssociationSchema: equipmentAssociationBody,
+  updateEquipmentAssociationSchema: updateEquipmentAssociationBody,
+  equipmentAssociationParamsSchema: equipmentAssociationParams,
+  availableConsultoriosSchema: availableQuery,
 };
