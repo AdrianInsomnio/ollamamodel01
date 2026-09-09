@@ -195,9 +195,7 @@ const listClinics = async (user) => {
 };
 
 const listUsers = async (user) => {
-  if (user.role !== "SUPER_ADMIN") {
-    throw new AppError("Access denied", 403, "FORBIDDEN");
-  }
+  requireAdminRole(user);
   const organization = await requireOrganization(user);
   const users = await repository.findUsersWithMetrics(organization.id);
   return {

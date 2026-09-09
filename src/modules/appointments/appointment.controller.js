@@ -56,7 +56,12 @@ const getAvailableSlots = async (req, res, next) => {
 
 const updateStatus = async (req, res, next) => {
   try {
-    const appointment = await service.updateStatus(req.params.id, req.body.status, req.user.clinicId);
+    const appointment = await service.updateStatus(
+      req.params.id,
+      req.user.clinicId,
+      req.body.status,
+      req.body.notes
+    );
     res.json({ appointment });
   } catch (error) {
     next(error);

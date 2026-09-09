@@ -11,7 +11,7 @@ router.use(authorize('ADMIN', 'SUPER_ADMIN'));
 router.get('/dashboard/metrics', controller.getDashboardMetrics);
 router.get('/clinics', controller.getClinics);
 
-// Listado de usuarios: solo SUPER_ADMIN (el service lo valida igual).
+// Listado de usuarios: ADMIN y SUPER_ADMIN.
 router.get('/users', controller.getUsers);
 router.post('/users', controller.createUser);
 router.put('/users/:id', controller.updateUser);

@@ -247,6 +247,8 @@ const login = async (email, password, ip, rememberMe = false) => {
   }
 
   const clinicId = user.clinics[0].id;
+  const lastLogin = new Date();
+  await userRepository.updateLastLogin(user.id, lastLogin);
   const expiresIn = rememberMe ? '30d' : '1d';
   const token = generateToken(
     {
@@ -260,7 +262,7 @@ const login = async (email, password, ip, rememberMe = false) => {
   );
 
   const { password: _, ...userWithoutPassword } = user;
-  return { user: userWithoutPassword, token };
+  return { user: { ...userWithoutPassword, lastLogin }, token };
 };
 
 const changePassword = async ({ userId, currentPassword, newPassword }) => {

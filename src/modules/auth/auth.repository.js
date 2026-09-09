@@ -15,6 +15,10 @@ const findUserByEmail = async (email, clinicId = undefined) => {
       password: true,
       organizationId: true,
       role: true,
+      isActive: true,
+      lastLogin: true,
+      createdAt: true,
+      updatedAt: true,
       clinics: { select: { id: true, name: true } }
     }
   });
@@ -104,6 +108,14 @@ const updatePassword = async (id, hashedPassword, passwordChangedAt = new Date()
   });
 };
 
+const updateLastLogin = async (id, lastLogin = new Date()) => {
+  return await prisma.user.update({
+    where: { id },
+    data: { lastLogin },
+    select: { id: true, lastLogin: true },
+  });
+};
+
 const getAllUsers = async (clinicId) => {
   const where = {};
   if (clinicId !== undefined && clinicId !== null) {
@@ -129,5 +141,6 @@ module.exports = {
   findUserByEmailOrUsername,
   createUser,
   updatePassword,
+  updateLastLogin,
   getAllUsers
 };

@@ -6,6 +6,7 @@ const { AppError } = require('../../core/errors/AppError');
 
 const petCreateSchema = Joi.object({
   name: Joi.string().min(1).max(100).required(),
+  sex: Joi.string().allow('').max(20).optional(),
   species: Joi.string().min(1).max(50).required(),
   breed: Joi.string().allow('').max(50).optional(),
   birthDate: Joi.date().iso().allow(null).optional(),
@@ -21,6 +22,7 @@ const petCreateSchema = Joi.object({
 
 const petUpdateSchema = Joi.object({
   name: Joi.string().min(1).max(100).optional(),
+  sex: Joi.string().allow('').max(20).optional(),
   species: Joi.string().min(1).max(50).optional(),
   breed: Joi.string().allow('').max(50).optional(),
   birthDate: Joi.date().iso().allow(null).optional(),
@@ -64,7 +66,17 @@ class PetService {
   }
 
   async getPets(filters, clinicId) {
-    const where = { ...(filters || {}) };
+    const where = {};
+    if (filters?.clientId !== undefined && filters?.clientId !== '') {
+      const clientId = Number(filters.clientId);
+      if (!Number.isInteger(clientId) || clientId <= 0) {
+        throw new AppError('Invalid client id', 400);
+      }
+      where.clientId = clientId;
+    }
+    if (filters?.isActive !== undefined) {
+      where.isActive = filters.isActive === 'true' || filters.isActive === true;
+    }
     if (clinicId !== undefined && clinicId !== null) {
       where.clinicId = clinicId;
     }

@@ -104,12 +104,23 @@ const getAvailableSlots = async (date, clinicId) => {
   return slots;
 };
 
-const updateStatus = async (id, clinicId, status) => {
+const updateStatus = async (id, clinicId, status, notes) => {
+  const appointmentId = Number(id);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    throw new AppError('Invalid appointment id', 400);
+  }
+
   const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
   if (!validStatuses.includes(status)) {
     throw new AppError('Invalid appointment status', 400);
   }
-  const item = await repository.update(id, clinicId, { status });
+  if (status === 'cancelled' && (!notes || !String(notes).trim())) {
+    throw new AppError('Cancellation reason is required', 400);
+  }
+  const item = await repository.update(appointmentId, clinicId, {
+    status,
+    ...(notes !== undefined ? { notes: String(notes).trim() } : {})
+  });
   if (!item) {
     throw new AppError('Appointment not found', 404);
   }

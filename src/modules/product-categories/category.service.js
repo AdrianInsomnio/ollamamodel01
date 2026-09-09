@@ -5,7 +5,7 @@ const getAll = (clinicId) => repository.findAll(clinicId);
 
 const create = async (data, clinicId) => {
   if (!data.name || !data.name.trim()) throw new AppError('El nombre de la categoría es obligatorio', 400);
-  return repository.create({ ...data, name: data.name.trim() }, clinicId);
+  return repository.create({ ...data, name: data.name.trim().toUpperCase() }, clinicId);
 };
 
 const update = async (id, clinicId, data) => {

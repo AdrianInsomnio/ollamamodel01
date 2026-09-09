@@ -12,8 +12,11 @@ const findUserById = async (id, clinicId) => {
       username: true,
       email: true,
       role: true,
+      isActive: true,
       organizationId: true,
+      lastLogin: true,
       createdAt: true,
+      updatedAt: true,
       clinics: { select: { id: true, name: true } },
     },
   });

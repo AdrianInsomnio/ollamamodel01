@@ -52,6 +52,17 @@ const create = async (data, clinicId) => {
     if (!appointment) {
       throw new AppError('Appointment not found', 404);
     }
+
+    // appointmentId es único: una cita no puede generar dos atenciones.
+    // Si el usuario reintenta la misma acción, devolvemos la atención abierta
+    // existente en lugar de provocar un error P2002 de Prisma.
+    const existingConsultation = await repository.findByAppointmentId(data.appointmentId, clinicId);
+    if (existingConsultation) {
+      if (existingConsultation.status === 'OPEN') {
+        return existingConsultation;
+      }
+      throw new AppError('This appointment already has a closed consultation', 409);
+    }
   }
 
   // Calcular tarifa total si se proporciona
@@ -61,7 +72,20 @@ const create = async (data, clinicId) => {
     data.totalFee = consultationFee + treatmentFee;
   }
 
-  return await repository.create(data, clinicId);
+  try {
+    return await repository.create(data, clinicId);
+  } catch (error) {
+    // Protege también contra dos solicitudes simultáneas que pasen el
+    // chequeo anterior antes de que alguna de ellas termine de crear.
+    if (error?.code === 'P2002' && data.appointmentId) {
+      const existingConsultation = await repository.findByAppointmentId(data.appointmentId, clinicId);
+      if (existingConsultation?.status === 'OPEN') return existingConsultation;
+      if (existingConsultation) {
+        throw new AppError('This appointment already has a closed consultation', 409);
+      }
+    }
+    throw error;
+  }
 };
 
 const getAll = async (clinicId) => {

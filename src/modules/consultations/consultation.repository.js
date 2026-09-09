@@ -203,6 +203,22 @@ const updateStatus = async (id, clinicId, status, closedAt = null) => {
   });
 };
 
+const findByAppointmentId = async (appointmentId, clinicId) => {
+  return await prisma.consultation.findFirst({
+    where: { appointmentId: Number(appointmentId), clinicId },
+    include: {
+      pet: true,
+      client: true,
+      appointment: true,
+      diagnoses: true,
+      treatments: true,
+      prescriptions: true,
+      sales: true,
+      consultorio: consultorioInclude
+    }
+  });
+};
+
 const consultationInclude = {
   pet: true,
   client: true,
@@ -282,6 +298,7 @@ module.exports = {
   findAll,
   findQueue,
   findById,
+  findByAppointmentId,
   findByPetId,
   findByClientId,
   addDiagnosis,

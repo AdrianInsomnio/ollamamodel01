@@ -432,6 +432,7 @@ model Payment {
 model Pet {
   id                  Int                  @id @default(autoincrement())
   name                String
+  sex                 String?
   species             String
   breed               String?
   birthDate           DateTime?
