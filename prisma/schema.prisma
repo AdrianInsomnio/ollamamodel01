@@ -37,9 +37,11 @@ model Clinic {
   services       Service[]
   users          User[]         @relation("UserClinics")
 
-  cashRegisters CashRegister[]
-  cashShifts    CashShift[]
-  cashMovements CashMovement[]
+  cashRegisters   CashRegister[]
+  cashShifts      CashShift[]
+  cashMovements   CashMovement[]
+  ticketPrints    TicketPrint[]
+  cashAuditEvents CashAuditEvent[]
 
   consultorios Consultorio[]
   equipment    Equipment[]
@@ -65,9 +67,11 @@ model User {
   subscriptions     Subscription[] @relation("SubscriptionUsers")
   clinics           Clinic[]       @relation("UserClinics")
 
-  cashShifts    CashShift[]
-  cashMovements CashMovement[]
-  sales         Sale[]
+  cashShifts      CashShift[]
+  cashMovements   CashMovement[]
+  sales           Sale[]
+  ticketPrints    TicketPrint[]
+  cashAuditEvents CashAuditEvent[]
 
   @@index([organizationId], map: "users_organizationId_fkey")
   @@map("users")
@@ -410,9 +414,10 @@ model Organization {
 }
 
 model Payment {
-  id               String @id
-  fiscalDocumentId String
+  id               String  @id
+  fiscalDocumentId String?
   cashShiftId      Int?
+  saleId           Int?
 
   amount    Decimal
   method    PaymentMethod
@@ -421,11 +426,13 @@ model Payment {
   paidAt    DateTime      @default(now())
   createdAt DateTime      @default(now())
 
-  fiscalDocument FiscalDocument @relation(fields: [fiscalDocumentId], references: [id], map: "Payment_fiscalDocumentId_fkey")
-  cashShift      CashShift?     @relation(fields: [cashShiftId], references: [id])
+  fiscalDocument FiscalDocument? @relation(fields: [fiscalDocumentId], references: [id], map: "Payment_fiscalDocumentId_fkey")
+  cashShift      CashShift?      @relation(fields: [cashShiftId], references: [id])
+  sale           Sale?           @relation(fields: [saleId], references: [id])
 
   @@index([fiscalDocumentId], map: "Payment_fiscalDocumentId_fkey")
   @@index([cashShiftId])
+  @@index([saleId])
   @@map("payments")
 }
 
@@ -491,8 +498,11 @@ model Sale {
   cashShiftId    Int?
   userId         Int?
 
-  cashShift CashShift? @relation(fields: [cashShiftId], references: [id])
-  user      User?      @relation(fields: [userId], references: [id])
+  cashShift       CashShift?       @relation(fields: [cashShiftId], references: [id])
+  user            User?            @relation(fields: [userId], references: [id])
+  payments        Payment[]
+  ticketPrints    TicketPrint[]
+  cashAuditEvents CashAuditEvent[]
 
   @@index([cashShiftId])
   @@index([userId])
@@ -605,8 +615,10 @@ model CashRegister {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinic Clinic      @relation(fields: [clinicId], references: [id])
-  shifts CashShift[]
+  clinic          Clinic           @relation(fields: [clinicId], references: [id])
+  shifts          CashShift[]
+  ticketPrints    TicketPrint[]
+  cashAuditEvents CashAuditEvent[]
 
   @@unique([clinicId, name])
   @@unique([clinicId, code])
@@ -640,9 +652,11 @@ model CashShift {
   user         User         @relation(fields: [userId], references: [id])
   clinic       Clinic       @relation(fields: [clinicId], references: [id])
 
-  movements CashMovement[]
-  payments  Payment[]
-  sales     Sale[]
+  movements       CashMovement[]
+  payments        Payment[]
+  sales           Sale[]
+  ticketPrints    TicketPrint[]
+  cashAuditEvents CashAuditEvent[]
 
   @@index([cashRegisterId])
   @@index([userId])
@@ -676,6 +690,63 @@ model CashMovement {
   @@index([userId])
   @@index([type])
   @@map("cash_movements")
+}
+
+model TicketPrint {
+  id             Int             @id @default(autoincrement())
+  saleId         Int
+  userId         Int
+  clinicId       Int
+  cashShiftId    Int?
+  cashRegisterId Int?
+  type           TicketPrintType
+  reprintNumber  Int             @default(0)
+  reason         String?
+  createdAt      DateTime        @default(now())
+
+  sale         Sale          @relation(fields: [saleId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  cashShift    CashShift?    @relation(fields: [cashShiftId], references: [id])
+  cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([saleId])
+  @@index([clinicId])
+  @@index([userId])
+  @@index([cashShiftId])
+  @@index([cashRegisterId])
+  @@map("ticket_prints")
+}
+
+enum TicketPrintType {
+  ORIGINAL
+  DUPLICATE
+}
+
+model CashAuditEvent {
+  id             Int      @id @default(autoincrement())
+  action         String
+  clinicId       Int
+  userId         Int
+  cashRegisterId Int?
+  cashShiftId    Int?
+  saleId         Int?
+  details        Json?
+  createdAt      DateTime @default(now())
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id])
+  cashShift    CashShift?    @relation(fields: [cashShiftId], references: [id])
+  sale         Sale?         @relation(fields: [saleId], references: [id])
+
+  @@index([clinicId])
+  @@index([userId])
+  @@index([cashRegisterId])
+  @@index([cashShiftId])
+  @@index([saleId])
+  @@index([action])
+  @@map("cash_audit_events")
 }
 
 model Consultorio {
