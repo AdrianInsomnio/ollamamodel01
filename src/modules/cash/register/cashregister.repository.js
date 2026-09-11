@@ -1,6 +1,7 @@
 // src/modules/cash/repositories/cash.repository.js
 
 const { prisma } = require("../../../lib/prisma");
+const { AppError } = require("../../../core/errors/AppError");
 
 /**
  * ============================
@@ -67,12 +68,13 @@ const updateRegister = async (id, clinicId, data) => {
  * ============================
  */
 
-const findOpenShiftByRegister = async (cashRegisterId, clinicId) => {
+const findOpenShiftByRegister = async (cashRegisterId, clinicId, userId) => {
   return prisma.cashShift.findFirst({
     where: {
       cashRegisterId,
       clinicId,
       status: "OPEN",
+      ...(userId ? { userId } : {}),
     },
     include: {
       cashRegister: true,
@@ -100,11 +102,12 @@ const findOpenShiftByUser = async (userId, clinicId) => {
   });
 };
 
-const findShiftById = async (id, clinicId) => {
+const findShiftById = async (id, clinicId, userId) => {
   return prisma.cashShift.findFirst({
     where: {
       id,
       clinicId,
+      ...(userId ? { userId } : {}),
     },
     include: {
       cashRegister: true,
@@ -140,6 +143,41 @@ const createShift = async (data) => {
   });
 };
 
+const createShiftAtomic = async (data) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM cash_registers
+      WHERE id = ${data.cashRegisterId} AND clinicId = ${data.clinicId}
+      FOR UPDATE
+    `;
+
+    const register = await tx.cashRegister.findFirst({
+      where: { id: data.cashRegisterId, clinicId: data.clinicId },
+    });
+    if (!register) throw new AppError("Caja no encontrada", 404);
+    if (!register.isActive) throw new AppError("La caja esta inactiva", 400);
+
+    const existingRegisterShift = await tx.cashShift.findFirst({
+      where: { cashRegisterId: data.cashRegisterId, clinicId: data.clinicId, status: "OPEN" },
+    });
+    if (existingRegisterShift) throw new AppError("La caja ya tiene un turno abierto", 409);
+
+    const existingUserShift = await tx.cashShift.findFirst({
+      where: { userId: data.userId, clinicId: data.clinicId, status: "OPEN" },
+    });
+    if (existingUserShift) throw new AppError("El usuario ya tiene un turno de caja abierto", 409);
+
+    return tx.cashShift.create({
+      data,
+      include: {
+        cashRegister: true,
+        user: { select: { id: true, username: true } },
+      },
+    });
+  });
+};
+
 const closeShift = async (id, clinicId, data) => {
   return prisma.cashShift.updateMany({
     where: {
@@ -160,6 +198,112 @@ const closeShift = async (id, clinicId, data) => {
 const createMovement = async (data) => {
   return prisma.cashMovement.create({
     data,
+  });
+};
+
+const closeShiftAtomic = async ({ id, clinicId, userId, countedAmount, closingNotes, differenceReason }) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM cash_shifts
+      WHERE id = ${id} AND clinicId = ${clinicId}
+      FOR UPDATE
+    `;
+
+    const shift = await tx.cashShift.findFirst({
+      where: { id, clinicId, ...(userId ? { userId } : {}) },
+    });
+    if (!shift) throw new AppError("Turno de caja no encontrado", 404);
+    if (shift.status !== "OPEN") throw new AppError("El turno de caja ya esta cerrado", 400);
+
+    const totals = await getShiftTotalsWithClient(tx, id, clinicId);
+    const expectedAmount = Number(shift.openingAmount) + totals.cashIn + totals.cashPayments - totals.cashOut + totals.adjustments;
+    const difference = Number(countedAmount) - expectedAmount;
+    if (difference !== 0 && !differenceReason) {
+      throw new AppError("Debe indicar el motivo de la diferencia de caja", 400);
+    }
+
+    const updated = await tx.cashShift.updateMany({
+      where: { id, clinicId, status: "OPEN" },
+      data: {
+        status: "CLOSED",
+        closedAt: new Date(),
+        expectedAmount,
+        countedAmount: Number(countedAmount),
+        difference,
+        closingNotes: closingNotes || null,
+        differenceReason: differenceReason || null,
+      },
+    });
+    if (updated.count !== 1) throw new AppError("El turno de caja ya fue cerrado", 409);
+
+    return tx.cashShift.findUnique({
+      where: { id },
+      include: {
+        cashRegister: true,
+        user: { select: { id: true, username: true, email: true } },
+        movements: { orderBy: { createdAt: "desc" } },
+        payments: true,
+      },
+    });
+  });
+};
+
+const getShiftTotalsWithClient = async (client, cashShiftId, clinicId) => {
+  const [movements, payments] = await Promise.all([
+    client.cashMovement.findMany({
+      where: { cashShiftId, clinicId },
+      select: { type: true, amount: true },
+    }),
+    client.payment.findMany({
+      where: { cashShiftId, method: "CASH" },
+      select: { amount: true },
+    }),
+  ]);
+
+  return movements.reduce((totals, movement) => {
+    const amount = Number(movement.amount);
+    if (movement.type === "CASH_IN") totals.cashIn += amount;
+    if (movement.type === "CASH_OUT") totals.cashOut += amount;
+    if (movement.type === "ADJUSTMENT") totals.adjustments += amount;
+    return totals;
+  }, {
+    cashIn: 0,
+    cashOut: 0,
+    adjustments: 0,
+    cashPayments: payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+  });
+};
+
+const createMovementAtomic = async (data) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM cash_shifts
+      WHERE id = ${data.cashShiftId} AND clinicId = ${data.clinicId}
+      FOR UPDATE
+    `;
+
+    const shift = await tx.cashShift.findFirst({
+      where: {
+        id: data.cashShiftId,
+        clinicId: data.clinicId,
+        ...(data.userIdScope ? { userId: data.userIdScope } : {}),
+      },
+    });
+    if (!shift) throw new AppError("Turno de caja no encontrado", 404);
+    if (shift.status !== "OPEN") throw new AppError("No se pueden registrar movimientos en un turno cerrado", 400);
+
+    if (data.type === "CASH_OUT") {
+      const totals = await getShiftTotalsWithClient(tx, data.cashShiftId, data.clinicId);
+      const available = Number(shift.openingAmount) + totals.cashIn + totals.cashPayments - totals.cashOut + totals.adjustments;
+      if (Number(data.amount) > available) {
+        throw new AppError("No hay efectivo suficiente para realizar el retiro", 400, "INSUFFICIENT_CASH");
+      }
+    }
+
+    const { userIdScope, ...movementData } = data;
+    return tx.cashMovement.create({ data: movementData });
   });
 };
 
@@ -371,9 +515,12 @@ module.exports = {
   findOpenShiftByUser,
   findShiftById,
   createShift,
+  createShiftAtomic,
   closeShift,
+  closeShiftAtomic,
 
   createMovement,
+  createMovementAtomic,
   findMovementsByShift,
 
   getShiftTotals,

@@ -152,6 +152,7 @@ const getCurrentShift = async (
       await cashRegisterService.getCurrentShift({
         cashRegisterId,
         clinicId,
+        userId: req.user.role === "USER" ? req.user.id : undefined,
       });
 
     res.json({
@@ -165,7 +166,7 @@ const getCurrentShift = async (
 
 const getShift = async (req, res, next) => {
   try {
-    const shift = await cashRegisterService.getShift(Number(req.params.shiftId), req.user.clinicId);
+    const shift = await cashRegisterService.getShift(Number(req.params.shiftId), req.user.clinicId, req.user.role === "USER" ? req.user.id : undefined);
     res.json({ success: true, data: shift });
   } catch (error) {
     next(error);
@@ -174,7 +175,7 @@ const getShift = async (req, res, next) => {
 
 const getMovements = async (req, res, next) => {
   try {
-    const movements = await cashRegisterService.getMovements(Number(req.params.shiftId), req.user.clinicId);
+    const movements = await cashRegisterService.getMovements(Number(req.params.shiftId), req.user.clinicId, req.user.role === "USER" ? req.user.id : undefined);
     res.json({ success: true, data: movements });
   } catch (error) {
     next(error);
@@ -261,6 +262,7 @@ const createMovement = async (
         cashShiftId,
         clinicId,
         userId,
+        userIdScope: req.user.role === "USER" ? req.user.id : undefined,
         type,
         amount,
         reason,
@@ -300,6 +302,7 @@ const closeShift = async (
       await cashRegisterService.closeShift({
         cashShiftId,
         clinicId,
+        userId: req.user.role === "USER" ? req.user.id : undefined,
         countedAmount,
         closingNotes,
         differenceReason,

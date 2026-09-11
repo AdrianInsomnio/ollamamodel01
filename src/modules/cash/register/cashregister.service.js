@@ -3,6 +3,18 @@
 const repository = require("./cashregister.repository");
 const { AppError } = require("../../../core/errors/AppError");
 
+const parseMoney = (value, fieldName) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new AppError(`${fieldName} debe ser un importe valido`, 400, "INVALID_AMOUNT");
+  }
+  return amount;
+};
+
+const expectedAmountFromTotals = (openingAmount, totals) => (
+  Number(openingAmount) + totals.cashIn + totals.cashPayments - totals.cashOut + totals.adjustments
+);
+
 // ============================
 // CASH REGISTER SERVICE
 // ============================
@@ -59,6 +71,7 @@ const openShift = async ({
   clinicId,
   openingAmount,
 }) => {
+  const normalizedOpeningAmount = parseMoney(openingAmount, "El monto de apertura");
   if (Number(openingAmount) < 0) {
     throw new AppError("El monto de apertura no puede ser negativo", 400);
   }
@@ -98,11 +111,11 @@ const openShift = async ({
     throw new AppError("El usuario ya tiene un turno de caja abierto", 409);
   }
 
-  return repository.createShift({
+  return repository.createShiftAtomic({
     cashRegisterId,
     userId,
     clinicId,
-    openingAmount,
+    openingAmount: normalizedOpeningAmount,
   });
 };
 /**
@@ -111,10 +124,11 @@ const openShift = async ({
  * ============================
  */
 
-const getCurrentShift = async ({ cashRegisterId, clinicId }) => {
+const getCurrentShift = async ({ cashRegisterId, clinicId, userId }) => {
   const shift = await repository.findOpenShiftByRegister(
     cashRegisterId,
     clinicId,
+    userId,
   );
 
   if (!shift) {
@@ -123,12 +137,7 @@ const getCurrentShift = async ({ cashRegisterId, clinicId }) => {
 
   const totals = await repository.getShiftTotals(shift.id, clinicId);
 
-  const expectedAmount =
-    Number(shift.openingAmount) +
-    totals.cashIn +
-    totals.cashPayments -
-    totals.cashOut +
-    totals.adjustments;
+  const expectedAmount = expectedAmountFromTotals(shift.openingAmount, totals);
 
   return {
     ...shift,
@@ -137,14 +146,14 @@ const getCurrentShift = async ({ cashRegisterId, clinicId }) => {
   };
 };
 
-const getShift = async (cashShiftId, clinicId) => {
-  const shift = await repository.findShiftById(cashShiftId, clinicId);
+const getShift = async (cashShiftId, clinicId, userId) => {
+  const shift = await repository.findShiftById(cashShiftId, clinicId, userId);
   if (!shift) throw new AppError("Turno de caja no encontrado", 404);
   return shift;
 };
 
-const getMovements = async (cashShiftId, clinicId) => {
-  await getShift(cashShiftId, clinicId);
+const getMovements = async (cashShiftId, clinicId, userId) => {
+  await getShift(cashShiftId, clinicId, userId);
   return repository.findMovementsByShift(cashShiftId, clinicId);
 };
 
@@ -172,6 +181,7 @@ const getAdminMovements = (clinicId, filters) => repository.adminMovements(clini
 const createAdminAdjustment = async ({ id, clinicId, userId, amount, reason, notes }) => {
   const shift = await repository.findShiftById(id, clinicId);
   if (!shift) throw new AppError("Turno de caja no encontrado", 404);
+  if (shift.status !== "OPEN") throw new AppError("No se pueden registrar movimientos en un turno cerrado", 400);
   return repository.createAdminAdjustment({
     cashShiftId: id,
     clinicId,
@@ -223,6 +233,7 @@ const createMovement = async ({
   cashShiftId,
   clinicId,
   userId,
+  userIdScope,
   type,
   amount,
   reason,
@@ -249,10 +260,11 @@ const createMovement = async ({
     );
   }
 
-  return repository.createMovement({
+  return repository.createMovementAtomic({
     cashShiftId,
     clinicId,
     userId,
+    userIdScope,
     type,
     amount,
     reason: reason || null,
@@ -269,6 +281,7 @@ const createMovement = async ({
 const closeShift = async ({
   cashShiftId,
   clinicId,
+  userId,
   countedAmount,
   closingNotes,
   differenceReason,
@@ -283,16 +296,14 @@ const closeShift = async ({
     throw new AppError("El turno de caja ya está cerrado", 400);
   }
 
+  const counted = Number(countedAmount);
+  if (!Number.isFinite(counted) || counted < 0) {
+    throw new AppError("El efectivo contado debe ser un importe valido", 400, "INVALID_AMOUNT");
+  }
+
   const totals = await repository.getShiftTotals(cashShiftId, clinicId);
 
-  const expectedAmount =
-    Number(shift.openingAmount) +
-    totals.cashIn +
-    totals.cashPayments -
-    totals.cashOut +
-    totals.adjustments;
-
-  const counted = Number(countedAmount);
+  const expectedAmount = expectedAmountFromTotals(shift.openingAmount, totals);
 
   const difference = counted - expectedAmount;
 
@@ -304,17 +315,14 @@ const closeShift = async ({
     throw new AppError("Debe indicar el motivo de la diferencia de caja", 400);
   }
 
-  await repository.closeShift(cashShiftId, clinicId, {
-    status: "CLOSED",
-    closedAt: new Date(),
-    expectedAmount,
+  return repository.closeShiftAtomic({
+    id: cashShiftId,
+    clinicId,
+    userId,
     countedAmount: counted,
-    difference,
-    closingNotes: closingNotes || null,
-    differenceReason: differenceReason || null,
+    closingNotes,
+    differenceReason,
   });
-
-  return repository.findShiftById(cashShiftId, clinicId);
 };
 
 module.exports = {

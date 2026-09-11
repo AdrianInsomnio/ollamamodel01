@@ -6,6 +6,7 @@ const { getRegister, getRegisters, createRegister, updateRegister, openShift, ge
 
 const { authMiddleware, authorize } = require('../../../core/middlewares');
 const { ROLES } = require('../../../core/constants/roles');
+const idempotency = require('../../../core/idempotency/idempotency.middleware');
 
 
 const router = express.Router();
@@ -62,15 +63,15 @@ router.patch("/:id", authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), updateRegister);
 /**
  * Abrir turno
  */
-router.post("/:id/shifts", authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), openShift);
+router.post("/:id/shifts", authorize(ROLES.ADMIN, ROLES.USER), idempotency("POST /api/cash/:id/shifts"), openShift);
 
 /**
  * Obtener turno actualmente abierto
  */
-router.get("/:id/current-shift", getCurrentShift);
+router.get("/:id/current-shift", authorize(ROLES.ADMIN, ROLES.USER), getCurrentShift);
 
-router.get("/shifts/:shiftId", authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), getShift);
-router.get("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), getMovements);
+router.get("/shifts/:shiftId", authorize(ROLES.ADMIN, ROLES.USER), getShift);
+router.get("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.USER), getMovements);
 
 /**
  * ============================
@@ -81,7 +82,7 @@ router.get("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.VET, ROLES
 /**
  * Registrar entrada/salida/ajuste
  */
-router.post("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), createMovement);
+router.post("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.USER), idempotency("POST /api/cash/shifts/:shiftId/movements"), createMovement);
 
 /**
  * ============================
@@ -92,6 +93,6 @@ router.post("/shifts/:shiftId/movements", authorize(ROLES.ADMIN, ROLES.VET, ROLE
 /**
  * Cerrar turno
  */
-router.post("/shifts/:shiftId/close", authorize(ROLES.ADMIN, ROLES.VET), closeShift);
+router.post("/shifts/:shiftId/close", authorize(ROLES.ADMIN, ROLES.USER), idempotency("POST /api/cash/shifts/:shiftId/close"), closeShift);
 
 module.exports = router;
