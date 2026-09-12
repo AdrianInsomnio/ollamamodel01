@@ -10,6 +10,8 @@ router.route('/')
   .post(petController.createPet)
   .get(petController.getPets);
 
+router.get('/search', petController.searchPets);
+
 router.route('/:id')
   .get(petController.getPet)
   .patch(petController.updatePet)

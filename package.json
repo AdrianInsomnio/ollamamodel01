@@ -14,7 +14,8 @@
         "test:coverage": "jest --coverage",
         "test:unit": "jest __tests__/unit",
         "test:integration": "jest __tests__/integration",
-        "test:services": "jest __tests__/unit/services"
+        "test:services": "jest __tests__/unit/services",
+        "seed:test": "node scripts/seed-test-data.js"
     },
     "dependencies": {
         "bcryptjs": "3.0.2",

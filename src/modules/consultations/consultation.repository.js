@@ -175,7 +175,7 @@ const remove = async (id, clinicId) => {
   await prisma.prescription.deleteMany({ where: { consultationId: id } });
 
   return await prisma.consultation.delete({
-    where: { id, clinicId }
+    where: { id }
   });
 };
 
@@ -190,7 +190,8 @@ const updateStatus = async (id, clinicId, status, closedAt = null) => {
     where: { id: consultation.id },
     data: {
       status,
-      ...(closedAt && { closedAt })
+      ...(closedAt && { closedAt }),
+      ...(status === 'CLOSED' && { consultorioId: null, startAt: null, endAt: null })
     },
     include: {
       pet: true,

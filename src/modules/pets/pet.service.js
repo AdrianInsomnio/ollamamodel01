@@ -83,6 +83,13 @@ class PetService {
     return await petRepository.findMany({ where });
   }
 
+  async searchPets(query, clinicId) {
+    if (!query || query.trim() === '') {
+      throw new AppError('Search query is required', 400);
+    }
+    return await petRepository.search(query.trim(), clinicId);
+  }
+
   async updatePet(id, data, clinicId) {
     await this.getPetById(id, clinicId);
     const { error, value } = petUpdateSchema.validate(data, { abortEarly: false });

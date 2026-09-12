@@ -46,6 +46,24 @@ class PetRepository {
     return await prisma.pet.findMany({ skip, take, where: normalized, orderBy });
   }
 
+  async search(query, clinicId) {
+    const searchQuery = query.trim();
+    return await prisma.pet.findMany({
+      where: {
+        client: { clinicId },
+        OR: [
+          { name: { contains: searchQuery } },
+          { species: { contains: searchQuery } },
+          { breed: { contains: searchQuery } },
+          { client: { name: { contains: searchQuery }, clinicId } },
+        ],
+      },
+      include: { client: { select: { id: true, name: true } } },
+      take: 20,
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async update(id, data) {
     const updateData = { ...data };
     if (updateData.clientId !== undefined) {

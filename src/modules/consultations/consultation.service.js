@@ -103,10 +103,7 @@ const getById = async (id, clinicId) => {
 };
 
 const getPetHistory = async (petId, clinicId) => {
-  const consultations = await repository.findByPetId(petId, clinicId);
-  if(!consultations || consultations.length === 0){
-    throw new AppError('No consultations found for this pet', 404);
-  }
+  const consultations = (await repository.findByPetId(petId, clinicId)) || [];
 
   return {
     petId,
@@ -199,9 +196,15 @@ const close = async (id, clinicId, closeData) => {
   // Validar que la consulta existe
   const consultation = await getById(id, clinicId);
 
-  // Validar que la consulta está abierta
+  // El cierre puede llegar dos veces por una doble acción o por una pantalla
+  // desactualizada. En ese caso devolvemos el resultado existente sin crear
+  // una segunda venta ni convertirlo en un error para el usuario.
   if (consultation.status !== 'OPEN') {
-    throw new AppError('Consultation is not open', 400);
+    if (consultation.status === 'CLOSED') {
+      const sale = consultation.sales?.[consultation.sales.length - 1] || null;
+      return { consultation, sale, printData: null };
+    }
+    throw new AppError('Consultation cannot be closed from its current status', 400);
   }
 
   // Validar items

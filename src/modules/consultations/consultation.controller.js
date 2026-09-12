@@ -123,6 +123,15 @@ const releaseConsultorio = async (req, res, next) => {
   }
 };
 
+const remove = async (req, res, next) => {
+  try {
+    await service.remove(Number(req.params.id), req.user.clinicId);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   create,
   getAll,
@@ -136,5 +145,6 @@ module.exports = {
   addPrescription,
   close,
   assignConsultorio,
-  releaseConsultorio
+  releaseConsultorio,
+  remove
 };

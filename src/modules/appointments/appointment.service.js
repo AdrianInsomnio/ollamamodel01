@@ -46,7 +46,7 @@ const create = async (data, clinicId) => {
     throw new AppError('Time slot is not available', 409);
   }
 
-  return await repository.create(data, clinicId);
+  return await repository.create({ ...data, date }, clinicId);
 };
 
 const getAll = async (clinicId) => {
@@ -128,6 +128,10 @@ const updateStatus = async (id, clinicId, status, notes) => {
 };
 
 const update = async (id, clinicId, data) => {
+  const appointmentId = Number(id);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    throw new AppError('Invalid appointment id', 400);
+  }
   if (data.duration !== undefined && Number(data.duration) < 0) {
     throw new AppError('Duration must be positive', 400);
   }
@@ -140,7 +144,7 @@ const update = async (id, clinicId, data) => {
       throw new AppError('Appointment date cannot be in the past', 400);
     }
   }
-  const item = await repository.update(id, clinicId, data);
+  const item = await repository.update(appointmentId, clinicId, data);
   if (!item) {
     throw new AppError('Appointment not found', 404);
   }
@@ -148,7 +152,11 @@ const update = async (id, clinicId, data) => {
 };
 
 const remove = async (id, clinicId) => {
-  return await repository.remove(id, clinicId);
+  const appointmentId = Number(id);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    throw new AppError('Invalid appointment id', 400);
+  }
+  return await repository.remove(appointmentId, clinicId);
 };
 
 module.exports = {

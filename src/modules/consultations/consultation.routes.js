@@ -15,6 +15,7 @@ router.get('/pet/:petId/history', controller.getPetHistory);
 router.get('/client/:clientId', controller.getClientConsultations);
 router.patch('/:id/consultorio', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), validate(schemas.consultationIdSchema, 'params'), validate(schemas.assignConsultorioSchema), controller.assignConsultorio);
 router.delete('/:id/consultorio', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), validate(schemas.consultationIdSchema, 'params'), controller.releaseConsultorio);
+router.delete('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER, ROLES.SUPER_ADMIN), validate(schemas.consultationIdSchema, 'params'), controller.remove);
 router.get('/:id', controller.getById);
 router.post('/:id/close', idempotency('POST /consultations/:id/close'), controller.close);
 router.post('/:id/diagnoses', controller.addDiagnosis);

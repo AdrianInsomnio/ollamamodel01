@@ -29,6 +29,12 @@ exports.getPets = catchAsync(async (req, res) => {
   res.status(200).json({ pets });
 });
 
+exports.searchPets = catchAsync(async (req, res) => {
+  const clinicId = requireClinicId(req.user);
+  const pets = await petService.searchPets(req.query.q, clinicId);
+  res.status(200).json({ pets });
+});
+
 exports.updatePet = catchAsync(async (req, res) => {
   const clinicId = requireClinicId(req.user);
   // Refuse tenant overrides via body

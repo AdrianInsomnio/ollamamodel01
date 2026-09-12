@@ -21,10 +21,10 @@ router.get('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.get
 // Actualizar estado: cualquier rol (podría restringirse más según la lógica de negocio)
 router.put('/:id/status', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.updateStatus);
 
-// Actualizar cita: admin y vet (assistant no puede modificar citas existentes)
-router.put('/:id', authorize(ROLES.ADMIN, ROLES.VET), controller.update);
+// Actualizar cita: roles operativos con acceso a la agenda
+router.put('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER, ROLES.SUPER_ADMIN), controller.update);
 
-// Eliminar cita: solo admin
-router.delete('/:id', authorize(ROLES.ADMIN), controller.remove);
+// Eliminar cita: roles operativos con acceso a la agenda
+router.delete('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER, ROLES.SUPER_ADMIN), controller.remove);
 
 module.exports = router;

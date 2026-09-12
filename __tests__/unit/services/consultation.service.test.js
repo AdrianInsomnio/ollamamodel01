@@ -228,8 +228,14 @@ describe('Consultation Service', () => {
       // Arrange
       mockConsultationRepository.findByPetId.mockResolvedValue([]);
 
-      // Act & Assert
-      await expect(consultationService.getPetHistory(mockPet.id, organizationId)).rejects.toThrow('No consultations found for this pet');
+      // Act
+      const result = await consultationService.getPetHistory(mockPet.id, organizationId);
+
+      // Assert
+      expect(result.petId).toBe(mockPet.id);
+      expect(result.consultationCount).toBe(0);
+      expect(result.consultations).toEqual([]);
+      expect(result.totalSpent).toBe(0);
     });
   });
 

@@ -102,8 +102,17 @@ const update = async (id, clinicId, data) => {
 };
 
 const remove = async (id, clinicId) => {
-  return await prisma.appointment.delete({
-    where: { id, clinicId }
+  return await prisma.$transaction(async (tx) => {
+    // Keep the consultation's clinical record, but remove its optional link
+    // before deleting the appointment to avoid a foreign-key failure.
+    await tx.consultation.updateMany({
+      where: { appointmentId: id },
+      data: { appointmentId: null }
+    });
+
+    return tx.appointment.delete({
+      where: { id, clinicId }
+    });
   });
 };
 
