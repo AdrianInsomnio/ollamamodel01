@@ -214,6 +214,66 @@ describe('Sale Service', () => {
     });
   });
 
+  describe('payments and cash shift', () => {
+    it('should prepare mixed payments linked to the cash shift', async () => {
+      const productWithPrice = { ...mockProduct, price: 100 };
+      const saleData = {
+        ...mockSaleData,
+        cashShiftId: 12,
+        userId: 7,
+        items: [{ ...mockSaleData.items[0], itemId: productWithPrice.id, quantity: 1 }],
+        payments: [
+          { method: 'cash', amount: 57 },
+          { method: 'DEBIT_CARD', amount: 57 },
+        ],
+      };
+
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([productWithPrice]);
+      mockSaleRepository.createWithStockMovements.mockResolvedValue({ id: 1 });
+
+      await saleService.createSale(saleData, organizationId);
+
+      expect(mockSaleRepository.createWithStockMovements).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cashShiftId: 12,
+          userId: 7,
+          paymentMethod: 'CASH',
+          payments: [
+            expect.objectContaining({ method: 'CASH', amount: 57 }),
+            expect.objectContaining({ method: 'DEBIT_CARD', amount: 57 }),
+          ],
+        }),
+        expect.any(Array),
+        expect.any(Array),
+        organizationId,
+      );
+    });
+
+    it('should reject payments whose sum does not match the sale total', async () => {
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
+
+      await expect(saleService.createSale({
+        ...mockSaleData,
+        cashShiftId: 12,
+        payments: [{ method: 'cash', amount: 1 }],
+      }, organizationId)).rejects.toThrow('La suma de los pagos debe coincidir');
+
+      expect(mockSaleRepository.createWithStockMovements).not.toHaveBeenCalled();
+    });
+
+    it('should reject explicit payments without a cash shift', async () => {
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
+
+      await expect(saleService.createSale({
+        ...mockSaleData,
+        payments: [{ method: 'cash', amount: 100 }],
+      }, organizationId)).rejects.toThrow('El turno de caja es obligatorio');
+    });
+  });
+
   describe('getById', () => {
     it('debería retornar una venta por ID', async () => {
       // Arrange
@@ -259,6 +319,50 @@ describe('Sale Service', () => {
     });
   });
 
+  describe('updateSale', () => {
+    it('should reject modifications when the associated shift is closed', async () => {
+      const saleId = 44;
+      mockSaleRepository.findById.mockResolvedValue({
+        id: saleId,
+        status: 'completed',
+        cashShiftId: 9,
+        cashShift: { status: 'CLOSED' },
+        client: { name: 'Cliente' },
+      });
+
+      await expect(saleService.updateSale(saleId, { items: [] }, organizationId, 7))
+        .rejects.toThrow('No puede modificarse este ticket porque el turno ya fue cerrado');
+      expect(mockSaleRepository.updateSaleAtomic).not.toHaveBeenCalled();
+    });
+
+    it('should calculate a new total and pass the replacement payments atomically', async () => {
+      const saleId = 45;
+      const productWithPrice = { ...mockProduct, price: 100, stock: 10 };
+      mockSaleRepository.findById.mockResolvedValue({
+        id: saleId,
+        status: 'completed',
+        cashShiftId: 9,
+        cashShift: { status: 'OPEN' },
+        client: { name: 'Cliente' },
+      });
+      mockProductRepository.findByIds.mockResolvedValue([productWithPrice]);
+      mockSaleRepository.updateSaleAtomic.mockResolvedValue({ id: saleId });
+
+      await saleService.updateSale(saleId, {
+        items: [{ itemType: 'product', itemId: productWithPrice.id, quantity: 1 }],
+        payments: [{ method: 'cash', amount: 114 }],
+        discount: 0,
+      }, organizationId, 7);
+
+      expect(mockSaleRepository.updateSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
+        id: saleId,
+        userId: 7,
+        payments: [expect.objectContaining({ method: 'CASH', amount: 114 })],
+        saleData: expect.objectContaining({ total: 114 }),
+      }));
+    });
+  });
+
   describe('cancelSale', () => {
     it('debería cancelar una venta y revertir stock', async () => {
       // Arrange
@@ -276,6 +380,7 @@ describe('Sale Service', () => {
       };
 
       saleRepository.findById.mockResolvedValue(mockSale);
+      mockSaleRepository.cancelSaleAtomic.mockResolvedValue({ message: 'Venta cancelada exitosamente' });
 
       // Act
       const result = await saleService.cancelSale(saleId, organizationId);
@@ -289,6 +394,7 @@ describe('Sale Service', () => {
       const saleId = faker.number.int();
       const mockSale = { id: saleId, status: 'cancelled' };
       saleRepository.findById.mockResolvedValue(mockSale);
+      mockSaleRepository.cancelSaleAtomic.mockRejectedValue(new AppError('La venta ya está cancelada', 400));
 
       // Act & Assert
       await expect(saleService.cancelSale(saleId, organizationId))
