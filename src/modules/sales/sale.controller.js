@@ -1,4 +1,13 @@
 const service = require('./sale.service');
+const { AppError } = require('../../core/errors/AppError');
+
+const saleIdFromRequest = (req) => {
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError('El identificador de venta debe ser un entero positivo', 400, 'INVALID_SALE_ID');
+  }
+  return id;
+};
 
 const create = async (req, res, next) => {
   try {
@@ -21,7 +30,7 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
-    const item = await service.getById(parseInt(req.params.id), req.user.clinicId);
+    const item = await service.getById(saleIdFromRequest(req), req.user.clinicId);
     res.json({ sale: item });
   } catch (error) {
     next(error);
@@ -30,7 +39,7 @@ const getById = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const item = await service.updateSale(parseInt(req.params.id), req.body, req.user.clinicId, req.user.id);
+    const item = await service.updateSale(saleIdFromRequest(req), req.body, req.user.clinicId, req.user.id);
     res.json(item);
   } catch (error) {
     next(error);
@@ -57,7 +66,7 @@ const getHeld = async (req, res, next) => {
 
 const resume = async (req, res, next) => {
   try {
-    const sale = await service.resumeHeldSale(parseInt(req.params.id), req.user.clinicId, req.user.id);
+    const sale = await service.resumeHeldSale(saleIdFromRequest(req), req.user.clinicId, req.user.id);
     res.json({ sale });
   } catch (error) {
     next(error);
@@ -66,7 +75,7 @@ const resume = async (req, res, next) => {
 
 const cancel = async (req, res, next) => {
   try {
-    const item = await service.cancelSale(parseInt(req.params.id), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
+    const item = await service.cancelSale(saleIdFromRequest(req), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
     res.json(item);
   } catch (error) {
     next(error);
@@ -75,7 +84,7 @@ const cancel = async (req, res, next) => {
 
 const print = async (req, res, next) => {
   try {
-    const result = await service.printSale(parseInt(req.params.id), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
+    const result = await service.printSale(saleIdFromRequest(req), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
     res.status(201).json(result);
   } catch (error) {
     next(error);
@@ -84,7 +93,7 @@ const print = async (req, res, next) => {
 
 const printHistory = async (req, res, next) => {
   try {
-    const prints = await service.getPrintHistory(parseInt(req.params.id), req.user.clinicId);
+    const prints = await service.getPrintHistory(saleIdFromRequest(req), req.user.clinicId);
     res.json({ prints });
   } catch (error) {
     next(error);

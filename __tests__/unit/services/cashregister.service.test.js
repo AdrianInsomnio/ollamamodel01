@@ -38,6 +38,18 @@ describe('Cash register operational service', () => {
     });
   });
 
+  it('devuelve null cuando la caja no tiene un turno abierto', async () => {
+    repository.findOpenShiftByRegister.mockResolvedValue(null);
+
+    await expect(service.getCurrentShift({
+      cashRegisterId: 2,
+      clinicId: 10,
+      userId: 7,
+    })).resolves.toBeNull();
+
+    expect(repository.getShiftTotals).not.toHaveBeenCalled();
+  });
+
   it('impide movimientos con importe invalido', async () => {
     await expect(service.createMovement({
       cashShiftId: 4,

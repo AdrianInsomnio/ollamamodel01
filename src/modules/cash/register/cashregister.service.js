@@ -132,7 +132,7 @@ const getCurrentShift = async ({ cashRegisterId, clinicId, userId }) => {
   );
 
   if (!shift) {
-    throw new AppError("No hay un turno abierto para esta caja", 404);
+    return null;
   }
 
   const totals = await repository.getShiftTotals(shift.id, clinicId);
