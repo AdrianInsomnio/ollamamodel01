@@ -216,6 +216,21 @@ const closeShiftAtomic = async ({ id, clinicId, userId, countedAmount, closingNo
     if (!shift) throw new AppError("Turno de caja no encontrado", 404);
     if (shift.status !== "OPEN") throw new AppError("El turno de caja ya esta cerrado", 400);
 
+    const heldSalesCount = await tx.sale.count({
+      where: {
+        clinicId,
+        cashShiftId: id,
+        status: { in: ["HELD", "IN_PROGRESS"] },
+      },
+    });
+    if (heldSalesCount > 0) {
+      throw new AppError(
+        `No se puede cerrar el turno porque existen ${heldSalesCount} cuentas en espera`,
+        400,
+        "HELD_SALES_PENDING",
+      );
+    }
+
     const totals = await getShiftTotalsWithClient(tx, id, clinicId);
     const expectedAmount = Number(shift.openingAmount) + totals.cashIn + totals.cashPayments - totals.cashOut + totals.adjustments;
     const difference = Number(countedAmount) - expectedAmount;

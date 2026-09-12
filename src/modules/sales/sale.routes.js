@@ -20,6 +20,19 @@ router.post(
   controller.create
 );
 
+router.post(
+  '/hold',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  idempotency('POST /api/sales/hold'),
+  controller.hold,
+);
+
+router.get(
+  '/held',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  controller.getHeld,
+);
+
 // Listar ventas: cualquier rol
 router.get('/', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getAll);
 
@@ -45,6 +58,13 @@ router.post(
   authorize(ROLES.ADMIN, ROLES.USER),
   idempotency('POST /api/sales/:id/print'),
   controller.print,
+);
+
+router.post(
+  '/:id/resume',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  idempotency('POST /api/sales/:id/resume'),
+  controller.resume,
 );
 
 router.get(

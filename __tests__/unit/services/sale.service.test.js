@@ -3,12 +3,14 @@ const saleService = require('../../../src/modules/sales/sale.service');
 const saleRepository = require('../../../src/modules/sales/sale.repository');
 const productRepository = require('../../../src/modules/products/product.repository');
 const clientRepository = require('../../../src/modules/clients/client.repository');
+const cashRegisterRepository = require('../../../src/modules/cash/register/cashregister.repository');
 const { AppError } = require('../../../src/core/errors/AppError');
 
 // Mocks
 jest.mock('../../../src/modules/sales/sale.repository');
 jest.mock('../../../src/modules/products/product.repository');
 jest.mock('../../../src/modules/clients/client.repository');
+jest.mock('../../../src/modules/cash/register/cashregister.repository');
 jest.mock('../../../src/lib/prisma', () => ({
   prisma: {
     pet: {
@@ -21,6 +23,7 @@ jest.mock('../../../src/lib/prisma', () => ({
 const mockSaleRepository = jest.mocked(saleRepository);
 const mockProductRepository = jest.mocked(productRepository);
 const mockClientRepository = jest.mocked(clientRepository);
+const mockCashRegisterRepository = jest.mocked(cashRegisterRepository);
 
 describe('Sale Service', () => {
   let organizationId;
@@ -271,6 +274,36 @@ describe('Sale Service', () => {
         ...mockSaleData,
         payments: [{ method: 'cash', amount: 100 }],
       }, organizationId)).rejects.toThrow('El turno de caja es obligatorio');
+    });
+  });
+
+  describe('held sales', () => {
+    it('guarda una cuenta en espera sin pagos y la asocia al turno abierto', async () => {
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
+      mockCashRegisterRepository.findShiftById.mockResolvedValue({ id: 8, status: 'OPEN' });
+      mockSaleRepository.createHeldSaleAtomic.mockResolvedValue({ id: 44, status: 'HELD' });
+
+      const result = await saleService.holdSale({ ...mockSaleData, cashShiftId: 8 }, organizationId, 7);
+
+      expect(result).toEqual({ id: 44, status: 'HELD' });
+      expect(mockSaleRepository.createHeldSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
+        cashShiftId: 8,
+        clinicId: organizationId,
+        userId: 7,
+        saleData: expect.not.objectContaining({ payments: expect.anything(), paymentMethod: expect.anything() }),
+      }));
+    });
+
+    it('lista y retoma únicamente cuentas del turno abierto', async () => {
+      mockCashRegisterRepository.findShiftById.mockResolvedValue({ id: 8, status: 'OPEN' });
+      mockSaleRepository.findHeldSales.mockResolvedValue([{ id: 44, status: 'HELD' }]);
+      mockSaleRepository.resumeHeldSaleAtomic.mockResolvedValue({ id: 44, status: 'IN_PROGRESS' });
+
+      await expect(saleService.getHeldSales(8, organizationId, 7)).resolves.toEqual([{ id: 44, status: 'HELD' }]);
+      await expect(saleService.resumeHeldSale(44, organizationId, 7)).resolves.toEqual({ id: 44, status: 'IN_PROGRESS' });
+      expect(mockSaleRepository.findHeldSales).toHaveBeenCalledWith(8, organizationId);
+      expect(mockSaleRepository.resumeHeldSaleAtomic).toHaveBeenCalledWith({ id: 44, clinicId: organizationId, userId: 7 });
     });
   });
 

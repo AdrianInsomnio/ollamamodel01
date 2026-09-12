@@ -143,6 +143,109 @@ const findById = async (id, clinicId) => {
   });
 };
 
+const createHeldSaleAtomic = async ({ saleData, items, clinicId, userId, cashShiftId }) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM cash_shifts
+      WHERE id = ${cashShiftId} AND clinicId = ${clinicId}
+      FOR UPDATE
+    `;
+
+    const shift = await tx.cashShift.findFirst({
+      where: { id: cashShiftId, clinicId, userId, status: 'OPEN' },
+      include: { cashRegister: true },
+    });
+    if (!shift) throw new AppError('El turno de caja no existe, no pertenece a la clínica o está cerrado', 400, 'INVALID_CASH_SHIFT');
+
+    const sale = await tx.sale.create({
+      data: {
+        ...saleData,
+        clinicId,
+        cashShiftId,
+        userId,
+        status: 'HELD',
+        paymentMethod: null,
+        saleItems: { create: items },
+      },
+      include: {
+        client: { select: { id: true, name: true } },
+        pet: { select: { id: true, name: true } },
+        saleItems: true,
+        payments: true,
+        cashShift: { include: { cashRegister: true } },
+      },
+    });
+
+    await tx.cashAuditEvent.create({
+      data: {
+        action: 'SALE_HELD',
+        clinicId,
+        userId,
+        cashRegisterId: shift.cashRegisterId,
+        cashShiftId,
+        saleId: sale.id,
+        details: { status: 'HELD', total: sale.total },
+      },
+    });
+
+    return sale;
+  });
+};
+
+const findHeldSales = async (cashShiftId, clinicId) => prisma.sale.findMany({
+  where: { cashShiftId, clinicId, status: 'HELD' },
+  include: {
+    client: { select: { id: true, name: true } },
+    pet: { select: { id: true, name: true } },
+    saleItems: true,
+    user: { select: { id: true, username: true } },
+  },
+  orderBy: { createdAt: 'asc' },
+});
+
+const resumeHeldSaleAtomic = async ({ id, clinicId, userId }) => {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id, clinicId, status: 'HELD' },
+      include: { cashShift: { include: { cashRegister: true } } },
+    });
+    if (!sale) throw new AppError('Cuenta en espera no encontrada', 404, 'HELD_SALE_NOT_FOUND');
+    if (!sale.cashShift || sale.cashShift.status !== 'OPEN') throw new AppError('No se puede retomar una cuenta con turno cerrado', 400, 'CASH_SHIFT_CLOSED');
+    if (sale.cashShift.userId !== userId) throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
+
+    await tx.$queryRaw`
+      SELECT id
+      FROM sales
+      WHERE id = ${id} AND clinicId = ${clinicId} AND status = 'HELD'
+      FOR UPDATE
+    `;
+
+    const updated = await tx.sale.updateMany({
+      where: { id, clinicId, status: 'HELD' },
+      data: { status: 'IN_PROGRESS', userId },
+    });
+    if (updated.count !== 1) throw new AppError('La cuenta en espera ya fue retomada', 409, 'HELD_SALE_ALREADY_RESUMED');
+
+    await tx.cashAuditEvent.create({
+      data: {
+        action: 'SALE_RESUMED',
+        clinicId,
+        userId,
+        cashRegisterId: sale.cashShift.cashRegisterId,
+        cashShiftId: sale.cashShiftId,
+        saleId: id,
+        details: { previousStatus: 'HELD', status: 'IN_PROGRESS' },
+      },
+    });
+
+    return tx.sale.findFirst({
+      where: { id, clinicId },
+      include: { client: true, pet: true, saleItems: true, payments: true, cashShift: { include: { cashRegister: true } } },
+    });
+  });
+};
+
 const createTicketPrintAtomic = async ({ saleId, clinicId, userId, reason }) => {
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findFirst({
@@ -226,6 +329,8 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
       throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
     }
 
+    const pendingSale = sale.status === 'HELD' || sale.status === 'IN_PROGRESS';
+
     await tx.$queryRaw`
       SELECT id
       FROM sales
@@ -236,6 +341,7 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
     await tx.sale.update({ where: { id }, data: { status: 'cancelled' } });
 
     for (const item of sale.saleItems) {
+      if (sale.status === 'HELD' || sale.status === 'IN_PROGRESS') continue;
       if (item.itemType !== 'product') continue;
       await tx.product.update({ where: { id: item.itemId }, data: { stock: { increment: item.quantity } } });
       await tx.stockMovement.create({
@@ -252,6 +358,7 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
     }
 
     for (const payment of sale.payments) {
+      if (sale.status === 'HELD' || sale.status === 'IN_PROGRESS') break;
       await tx.payment.create({
         data: {
           id: require('node:crypto').randomUUID(),
@@ -312,7 +419,7 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
     `;
 
     for (const item of sale.saleItems) {
-      if (item.itemType === 'product') {
+      if (!pendingSale && item.itemType === 'product') {
         await tx.product.update({ where: { id: item.itemId }, data: { stock: { increment: item.quantity } } });
       }
     }
@@ -325,6 +432,7 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
     }
 
     for (const payment of sale.payments) {
+      if (pendingSale) break;
       await tx.payment.create({
         data: {
           id: require('node:crypto').randomUUID(),
@@ -423,6 +531,9 @@ const getTotalSalesByPeriod = async (startDate, endDate, clinicId) => {
 module.exports = {
   create,
   createWithStockMovements,
+  createHeldSaleAtomic,
+  findHeldSales,
+  resumeHeldSaleAtomic,
   findAll,
   findById,
   createTicketPrintAtomic,

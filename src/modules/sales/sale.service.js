@@ -1,6 +1,7 @@
 const repository = require('./sale.repository');
 const productRepository = require('../products/product.repository');
 const clientRepository = require('../clients/client.repository');
+const cashRegisterRepository = require('../cash/register/cashregister.repository');
 const { AppError } = require('../../core/errors/AppError');
 const { prisma } = require('../../lib/prisma');
 
@@ -314,6 +315,82 @@ const printSale = async (saleId, clinicId, userId, reason) => {
   };
 };
 
+const prepareHeldItems = async (items, clinicId) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new AppError('La venta debe incluir al menos un item', 400);
+  }
+
+  const productIds = items.filter((item) => item.itemType === 'product').map((item) => item.itemId);
+  const products = await productRepository.findByIds(productIds, clinicId);
+  const productMap = new Map(products.map((product) => [product.id, product]));
+
+  return items.map((item) => {
+    const quantity = Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new AppError('La cantidad debe ser mayor a cero', 400, 'INVALID_QUANTITY');
+    }
+
+    if (item.itemType === 'product') {
+      const product = productMap.get(item.itemId);
+      if (!product) throw new AppError(`Producto ${item.itemId} no encontrado`, 404);
+      if (!product.isActive) throw new AppError(`Producto ${product.name} no está activo`, 400);
+      if (product.stock < quantity) throw new AppError(`Stock insuficiente para ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+      return {
+        itemType: 'product',
+        itemId: item.itemId,
+        nameSnapshot: product.name,
+        priceSnapshot: product.price,
+        quantity,
+        subtotal: product.price * quantity,
+      };
+    }
+
+    if (item.itemType === 'service') {
+      const price = Number(item.priceSnapshot);
+      if (!item.nameSnapshot || !Number.isFinite(price) || price < 0) throw new AppError('Servicio inválido', 400);
+      return { itemType: 'service', itemId: item.itemId, nameSnapshot: item.nameSnapshot, priceSnapshot: price, quantity, subtotal: price * quantity };
+    }
+
+    throw new AppError('Tipo de item inválido', 400, 'INVALID_SALE_ITEM');
+  });
+};
+
+const holdSale = async (saleData, clinicId, userId) => {
+  const cashShiftId = Number(saleData.cashShiftId);
+  if (!Number.isInteger(cashShiftId)) throw new AppError('El turno de caja es obligatorio para guardar una cuenta en espera', 400, 'CASH_SHIFT_REQUIRED');
+
+  const client = await clientRepository.findById(saleData.clientId, clinicId);
+  if (!client) throw new AppError('Cliente no encontrado', 404);
+  if (saleData.petId) {
+    const pet = await prisma.pet.findFirst({ where: { id: saleData.petId, clinicId, clientId: saleData.clientId } });
+    if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
+  }
+
+  const items = await prepareHeldItems(saleData.items, clinicId);
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const discountRate = Number(saleData.discount ?? 0);
+  if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
+  const discount = subtotal * discountRate / 100;
+  const tax = (subtotal - discount) * TAX_RATE;
+  const total = subtotal - discount + tax;
+
+  return repository.createHeldSaleAtomic({
+    saleData: { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null },
+    items,
+    clinicId,
+    userId,
+    cashShiftId,
+  });
+};
+
+const getHeldSales = async (cashShiftId, clinicId, userId) => {
+  const shift = await cashRegisterRepository.findShiftById(cashShiftId, clinicId, userId);
+  if (!shift || shift.status !== 'OPEN') throw new AppError('El turno de caja no existe o está cerrado', 400, 'CASH_SHIFT_CLOSED');
+  return repository.findHeldSales(cashShiftId, clinicId);
+};
+
+const resumeHeldSale = async (id, clinicId, userId) => repository.resumeHeldSaleAtomic({ id, clinicId, userId });
+
 const getPrintHistory = async (saleId, clinicId) => repository.findTicketPrints(saleId, clinicId);
 
 const prepareModifiedItems = async (items, clinicId, clientName) => {
@@ -384,6 +461,9 @@ const cancelSalePhase4 = async (id, clinicId, userId, reason) => {
 module.exports = {
   create,
   createSale,
+  holdSale,
+  getHeldSales,
+  resumeHeldSale,
   getAll,
   getById,
   getSalesByClient,

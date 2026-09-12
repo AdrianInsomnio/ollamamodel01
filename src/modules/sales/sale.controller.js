@@ -37,6 +37,33 @@ const update = async (req, res, next) => {
   }
 };
 
+const hold = async (req, res, next) => {
+  try {
+    const sale = await service.holdSale(req.body, req.user.clinicId, req.user.id);
+    res.status(201).json({ sale });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getHeld = async (req, res, next) => {
+  try {
+    const sales = await service.getHeldSales(Number(req.query.cashShiftId), req.user.clinicId, req.user.id);
+    res.json({ sales });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const resume = async (req, res, next) => {
+  try {
+    const sale = await service.resumeHeldSale(parseInt(req.params.id), req.user.clinicId, req.user.id);
+    res.json({ sale });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const cancel = async (req, res, next) => {
   try {
     const item = await service.cancelSale(parseInt(req.params.id), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
@@ -64,4 +91,4 @@ const printHistory = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, cancel, print, printHistory };
+module.exports = { create, hold, getHeld, resume, getAll, getById, update, cancel, print, printHistory };
