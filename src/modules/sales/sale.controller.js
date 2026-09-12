@@ -46,18 +46,18 @@ const update = async (req, res, next) => {
   }
 };
 
-const hold = async (req, res, next) => {
+const waiting = async (req, res, next) => {
   try {
-    const sale = await service.holdSale(req.body, req.user.clinicId, req.user.id);
+    const sale = await service.createWaitingSale(req.body, req.user.clinicId, req.user.id);
     res.status(201).json({ sale });
   } catch (error) {
     next(error);
   }
 };
 
-const getHeld = async (req, res, next) => {
+const getWaiting = async (req, res, next) => {
   try {
-    const sales = await service.getHeldSales(Number(req.query.cashShiftId), req.user.clinicId, req.user.id);
+    const sales = await service.getWaitingSales(Number(req.query.cashShiftId), req.user.clinicId, req.user.id);
     res.json({ sales });
   } catch (error) {
     next(error);
@@ -66,7 +66,7 @@ const getHeld = async (req, res, next) => {
 
 const resume = async (req, res, next) => {
   try {
-    const sale = await service.resumeHeldSale(saleIdFromRequest(req), req.user.clinicId, req.user.id);
+    const sale = await service.resumeWaitingSale(saleIdFromRequest(req), req.user.clinicId, req.user.id);
     res.json({ sale });
   } catch (error) {
     next(error);
@@ -100,4 +100,4 @@ const printHistory = async (req, res, next) => {
   }
 };
 
-module.exports = { create, hold, getHeld, resume, getAll, getById, update, cancel, print, printHistory };
+module.exports = { create, waiting, getWaiting, resume, getAll, getById, update, cancel, print, printHistory };

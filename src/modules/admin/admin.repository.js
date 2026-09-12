@@ -1,6 +1,7 @@
 ﻿const { prisma } = require("../../lib/prisma");
 const { AppError } = require("../../core/errors/AppError");
 const { hashPassword } = require("../../core/utils/password.util");
+const { SALE_STATUS, LEGACY_SALE_STATUS } = require("../sales/sale.status");
 
 const startOfDay = (date) => {
   const d = new Date(date);
@@ -75,7 +76,7 @@ const getClinicMetrics = async (clinicId, start, end) => {
   const salesResult = await prisma.sale.aggregate({
     where: {
       clinicId: cId,
-      status: "completed",
+      status: { in: [SALE_STATUS.CONFIRMED, LEGACY_SALE_STATUS.CONFIRMED] },
       createdAt: { gte: start, lt: end },
     },
     _sum: { total: true, tax: true },

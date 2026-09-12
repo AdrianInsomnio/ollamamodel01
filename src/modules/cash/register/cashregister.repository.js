@@ -2,6 +2,7 @@
 
 const { prisma } = require("../../../lib/prisma");
 const { AppError } = require("../../../core/errors/AppError");
+const { SALE_STATUS, LEGACY_SALE_STATUS } = require('../../sales/sale.status');
 
 /**
  * ============================
@@ -216,18 +217,18 @@ const closeShiftAtomic = async ({ id, clinicId, userId, countedAmount, closingNo
     if (!shift) throw new AppError("Turno de caja no encontrado", 404);
     if (shift.status !== "OPEN") throw new AppError("El turno de caja ya esta cerrado", 400);
 
-    const heldSalesCount = await tx.sale.count({
+    const waitingSalesCount = await tx.sale.count({
       where: {
         clinicId,
         cashShiftId: id,
-        status: { in: ["HELD", "IN_PROGRESS"] },
+        status: { in: [SALE_STATUS.WAITING, LEGACY_SALE_STATUS.WAITING] },
       },
     });
-    if (heldSalesCount > 0) {
+    if (waitingSalesCount > 0) {
       throw new AppError(
-        `No se puede cerrar el turno porque existen ${heldSalesCount} cuentas en espera`,
+        `No se puede cerrar el turno porque existen ${waitingSalesCount} cuentas en espera`,
         400,
-        "HELD_SALES_PENDING",
+        "WAITING_SALES_PENDING",
       );
     }
 
@@ -426,7 +427,7 @@ const adminSummary = async (clinicId, filters) => {
   const period = {};
   if (filters.dateFrom) period.gte = filters.dateFrom;
   if (filters.dateTo) period.lt = filters.dateTo;
-  const saleWhere = { clinicId, status: "completed" };
+  const saleWhere = { clinicId, status: { in: [SALE_STATUS.CONFIRMED, LEGACY_SALE_STATUS.CONFIRMED] } };
   const paymentWhere = { cashShift: { clinicId } };
   if (Object.keys(period).length) { saleWhere.createdAt = period; paymentWhere.paidAt = period; }
   if (filters.cashRegisterId || filters.userId) {

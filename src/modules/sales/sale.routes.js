@@ -21,17 +21,21 @@ router.post(
 );
 
 router.post(
-  '/hold',
+  '/waiting',
   authorize(ROLES.ADMIN, ROLES.USER),
-  idempotency('POST /api/sales/hold'),
-  controller.hold,
+  idempotency('POST /api/sales/waiting'),
+  controller.waiting,
 );
 
 router.get(
-  '/held',
+  '/waiting',
   authorize(ROLES.ADMIN, ROLES.USER),
-  controller.getHeld,
+  controller.getWaiting,
 );
+
+// Compatibilidad temporal con clientes que todavía usan los paths anteriores.
+router.post('/hold', authorize(ROLES.ADMIN, ROLES.USER), idempotency('POST /api/sales/waiting'), controller.waiting);
+router.get('/held', authorize(ROLES.ADMIN, ROLES.USER), controller.getWaiting);
 
 // Listar ventas: cualquier rol
 router.get('/', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getAll);

@@ -4,6 +4,7 @@ const clientRepository = require('../clients/client.repository');
 const cashRegisterRepository = require('../cash/register/cashregister.repository');
 const { AppError } = require('../../core/errors/AppError');
 const { prisma } = require('../../lib/prisma');
+const { SALE_STATUS, isCancelledStatus, normalizeSaleStatus } = require('./sale.status');
 
 const TAX_RATE = 0.14; // IVA 14% en Uruguay
 
@@ -185,7 +186,7 @@ const createSale = async (saleData, clinicId) => {
     tax,
     total,
     paymentMethod: payments[0].method,
-    status: 'completed'
+    status: SALE_STATUS.CONFIRMED
   };
 
   if (cashShiftId != null) {
@@ -202,11 +203,12 @@ const createSale = async (saleData, clinicId) => {
     clinicId
   );
 
-  return sale;
+  return { ...sale, status: normalizeSaleStatus(sale.status) };
 };
 
 const getAll = async (clinicId) => {
-  return await repository.findAll(clinicId);
+  const sales = await repository.findAll(clinicId);
+  return (sales || []).map((sale) => ({ ...sale, status: normalizeSaleStatus(sale.status) }));
 };
 
 const getById = async (id, clinicId) => {
@@ -214,7 +216,7 @@ const getById = async (id, clinicId) => {
   if (!item) {
     throw new AppError('Venta no encontrada', 404);
   }
-  return item;
+  return { ...item, status: normalizeSaleStatus(item.status) };
 };
 
 const getSalesByClient = async (clientId, clinicId) => {
@@ -241,7 +243,7 @@ const getSalesReport = async (startDate, endDate, clinicId) => {
 const cancelSaleLegacy = async (id, clinicId) => {
   const sale = await getById(id, clinicId);
 
-  if (sale.status === 'cancelled') {
+  if (isCancelledStatus(sale.status)) {
     throw new AppError('La venta ya está cancelada', 400);
   }
 
@@ -250,7 +252,7 @@ const cancelSaleLegacy = async (id, clinicId) => {
     // Actualizar estado de la venta
     await tx.sale.update({
       where: { id },
-      data: { status: 'cancelled' }
+      data: { status: SALE_STATUS.CANCELLED }
     });
 
     // Revertir stock para productos
@@ -315,7 +317,7 @@ const printSale = async (saleId, clinicId, userId, reason) => {
   };
 };
 
-const prepareHeldItems = async (items, clinicId) => {
+const prepareWaitingItems = async (items, clinicId) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new AppError('La venta debe incluir al menos un item', 400);
   }
@@ -355,7 +357,7 @@ const prepareHeldItems = async (items, clinicId) => {
   });
 };
 
-const holdSale = async (saleData, clinicId, userId) => {
+const createWaitingSale = async (saleData, clinicId, userId) => {
   const cashShiftId = Number(saleData.cashShiftId);
   if (!Number.isInteger(cashShiftId)) throw new AppError('El turno de caja es obligatorio para guardar una cuenta en espera', 400, 'CASH_SHIFT_REQUIRED');
 
@@ -366,7 +368,7 @@ const holdSale = async (saleData, clinicId, userId) => {
     if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
   }
 
-  const items = await prepareHeldItems(saleData.items, clinicId);
+  const items = await prepareWaitingItems(saleData.items, clinicId);
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const discountRate = Number(saleData.discount ?? 0);
   if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
@@ -374,22 +376,27 @@ const holdSale = async (saleData, clinicId, userId) => {
   const tax = (subtotal - discount) * TAX_RATE;
   const total = subtotal - discount + tax;
 
-  return repository.createHeldSaleAtomic({
+  const sale = await repository.createWaitingSaleAtomic({
     saleData: { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null },
     items,
     clinicId,
     userId,
     cashShiftId,
   });
+  return { ...sale, status: normalizeSaleStatus(sale.status) };
 };
 
-const getHeldSales = async (cashShiftId, clinicId, userId) => {
+const getWaitingSales = async (cashShiftId, clinicId, userId) => {
   const shift = await cashRegisterRepository.findShiftById(cashShiftId, clinicId, userId);
   if (!shift || shift.status !== 'OPEN') throw new AppError('El turno de caja no existe o está cerrado', 400, 'CASH_SHIFT_CLOSED');
-  return repository.findHeldSales(cashShiftId, clinicId);
+  const sales = await repository.findWaitingSales(cashShiftId, clinicId);
+  return sales.map((sale) => ({ ...sale, status: normalizeSaleStatus(sale.status) }));
 };
 
-const resumeHeldSale = async (id, clinicId, userId) => repository.resumeHeldSaleAtomic({ id, clinicId, userId });
+const resumeWaitingSale = async (id, clinicId, userId) => {
+  const sale = await repository.resumeWaitingSaleAtomic({ id, clinicId, userId });
+  return { ...sale, status: normalizeSaleStatus(sale.status) };
+};
 
 const getPrintHistory = async (saleId, clinicId) => repository.findTicketPrints(saleId, clinicId);
 
@@ -425,7 +432,7 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
 
 const updateSale = async (id, saleData, clinicId, userId) => {
   const sale = await getById(id, clinicId);
-  if (sale.status === 'cancelled') throw new AppError('No puede modificarse una venta cancelada', 400);
+  if (isCancelledStatus(sale.status)) throw new AppError('No puede modificarse una venta cancelada', 400);
   if (!sale.cashShiftId || !sale.cashShift || sale.cashShift.status !== 'OPEN') {
     throw new AppError('No puede modificarse este ticket porque el turno ya fue cerrado', 400, 'CASH_SHIFT_CLOSED');
   }
@@ -443,7 +450,7 @@ const updateSale = async (id, saleData, clinicId, userId) => {
     id,
     clinicId,
     userId,
-    saleData: { subtotal, discount, tax, total, paymentMethod: payments[0].method, status: 'completed' },
+    saleData: { subtotal, discount, tax, total, paymentMethod: payments[0].method, status: SALE_STATUS.CONFIRMED },
     items: processedItems,
     stockMovements,
     payments,
@@ -461,9 +468,9 @@ const cancelSalePhase4 = async (id, clinicId, userId, reason) => {
 module.exports = {
   create,
   createSale,
-  holdSale,
-  getHeldSales,
-  resumeHeldSale,
+  createWaitingSale,
+  getWaitingSales,
+  resumeWaitingSale,
   getAll,
   getById,
   getSalesByClient,

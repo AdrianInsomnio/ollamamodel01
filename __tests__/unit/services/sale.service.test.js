@@ -277,17 +277,17 @@ describe('Sale Service', () => {
     });
   });
 
-  describe('held sales', () => {
+  describe('waiting sales', () => {
     it('guarda una cuenta en espera sin pagos y la asocia al turno abierto', async () => {
       mockClientRepository.findById.mockResolvedValue(mockClient);
       mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
       mockCashRegisterRepository.findShiftById.mockResolvedValue({ id: 8, status: 'OPEN' });
-      mockSaleRepository.createHeldSaleAtomic.mockResolvedValue({ id: 44, status: 'HELD' });
+      mockSaleRepository.createWaitingSaleAtomic.mockResolvedValue({ id: 44, status: 'WAITING' });
 
-      const result = await saleService.holdSale({ ...mockSaleData, cashShiftId: 8 }, organizationId, 7);
+      const result = await saleService.createWaitingSale({ ...mockSaleData, cashShiftId: 8 }, organizationId, 7);
 
-      expect(result).toEqual({ id: 44, status: 'HELD' });
-      expect(mockSaleRepository.createHeldSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
+      expect(result).toEqual({ id: 44, status: 'WAITING' });
+      expect(mockSaleRepository.createWaitingSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
         cashShiftId: 8,
         clinicId: organizationId,
         userId: 7,
@@ -297,13 +297,13 @@ describe('Sale Service', () => {
 
     it('lista y retoma únicamente cuentas del turno abierto', async () => {
       mockCashRegisterRepository.findShiftById.mockResolvedValue({ id: 8, status: 'OPEN' });
-      mockSaleRepository.findHeldSales.mockResolvedValue([{ id: 44, status: 'HELD' }]);
-      mockSaleRepository.resumeHeldSaleAtomic.mockResolvedValue({ id: 44, status: 'IN_PROGRESS' });
+      mockSaleRepository.findWaitingSales.mockResolvedValue([{ id: 44, status: 'WAITING' }]);
+      mockSaleRepository.resumeWaitingSaleAtomic.mockResolvedValue({ id: 44, status: 'DRAFT' });
 
-      await expect(saleService.getHeldSales(8, organizationId, 7)).resolves.toEqual([{ id: 44, status: 'HELD' }]);
-      await expect(saleService.resumeHeldSale(44, organizationId, 7)).resolves.toEqual({ id: 44, status: 'IN_PROGRESS' });
-      expect(mockSaleRepository.findHeldSales).toHaveBeenCalledWith(8, organizationId);
-      expect(mockSaleRepository.resumeHeldSaleAtomic).toHaveBeenCalledWith({ id: 44, clinicId: organizationId, userId: 7 });
+      await expect(saleService.getWaitingSales(8, organizationId, 7)).resolves.toEqual([{ id: 44, status: 'WAITING' }]);
+      await expect(saleService.resumeWaitingSale(44, organizationId, 7)).resolves.toEqual({ id: 44, status: 'DRAFT' });
+      expect(mockSaleRepository.findWaitingSales).toHaveBeenCalledWith(8, organizationId);
+      expect(mockSaleRepository.resumeWaitingSaleAtomic).toHaveBeenCalledWith({ id: 44, clinicId: organizationId, userId: 7 });
     });
   });
 
