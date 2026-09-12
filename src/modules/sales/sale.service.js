@@ -364,7 +364,8 @@ const createWaitingSale = async (saleData, clinicId, userId) => {
   const client = await clientRepository.findById(saleData.clientId, clinicId);
   if (!client) throw new AppError('Cliente no encontrado', 404);
   if (saleData.petId) {
-    const pet = await prisma.pet.findFirst({ where: { id: saleData.petId, clinicId, clientId: saleData.clientId } });
+    // La mascota no tiene clinicId propio; el cliente ya fue validado dentro de la clínica.
+    const pet = await prisma.pet.findFirst({ where: { id: saleData.petId, clientId: saleData.clientId } });
     if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
   }
 

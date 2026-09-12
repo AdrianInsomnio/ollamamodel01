@@ -167,6 +167,7 @@ const createWaitingSaleAtomic = async ({ saleData, items, clinicId, userId, cash
         userId,
         status: SALE_STATUS.WAITING,
         paymentMethod: null,
+        updatedAt: new Date(),
         saleItems: { create: items },
       },
       include: {
