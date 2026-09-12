@@ -143,6 +143,69 @@ const findById = async (id, clinicId) => {
   });
 };
 
+const createTicketPrintAtomic = async ({ saleId, clinicId, userId, reason }) => {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id: saleId, clinicId },
+      include: {
+        client: { select: { id: true, name: true, documentId: true, phone: true } },
+        pet: { select: { id: true, name: true, species: true, breed: true } },
+        saleItems: true,
+        payments: { orderBy: { createdAt: 'asc' } },
+        cashShift: { include: { cashRegister: true } },
+      },
+    });
+
+    if (!sale) throw new AppError('Venta no encontrada', 404);
+
+    await tx.$queryRaw`
+      SELECT id
+      FROM sales
+      WHERE id = ${saleId} AND clinicId = ${clinicId}
+      FOR UPDATE
+    `;
+
+    const printCount = await tx.ticketPrint.count({ where: { saleId, clinicId } });
+    const type = printCount === 0 ? 'ORIGINAL' : 'DUPLICATE';
+    const print = await tx.ticketPrint.create({
+      data: {
+        saleId,
+        userId,
+        clinicId,
+        cashShiftId: sale.cashShiftId,
+        cashRegisterId: sale.cashShift?.cashRegisterId || null,
+        type,
+        reprintNumber: printCount,
+        reason: reason || null,
+      },
+    });
+
+    await tx.cashAuditEvent.create({
+      data: {
+        action: type === 'ORIGINAL' ? 'TICKET_PRINTED' : 'TICKET_REPRINTED',
+        clinicId,
+        userId,
+        cashRegisterId: sale.cashShift?.cashRegisterId || null,
+        cashShiftId: sale.cashShiftId,
+        saleId,
+        details: { printId: print.id, type, reprintNumber: print.reprintNumber, reason: reason || null },
+      },
+    });
+
+    return { sale, print };
+  });
+};
+
+const findTicketPrints = async (saleId, clinicId) => {
+  const sale = await prisma.sale.findFirst({ where: { id: saleId, clinicId }, select: { id: true } });
+  if (!sale) throw new AppError('Venta no encontrada', 404);
+  return prisma.ticketPrint.findMany({
+    where: { saleId, clinicId },
+    include: { user: { select: { id: true, username: true, email: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+};
+
 const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findFirst({
@@ -362,6 +425,8 @@ module.exports = {
   createWithStockMovements,
   findAll,
   findById,
+  createTicketPrintAtomic,
+  findTicketPrints,
   cancelSaleAtomic,
   updateSaleAtomic,
   getSalesByClient,

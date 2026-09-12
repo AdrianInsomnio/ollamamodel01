@@ -402,4 +402,48 @@ describe('Sale Service', () => {
         .toThrow(new AppError('La venta ya está cancelada', 400));
     });
   });
+
+  describe('printSale', () => {
+    it('should register the original print without changing the sale', async () => {
+      const sale = {
+        id: 80,
+        subtotal: 100,
+        discount: 0,
+        tax: 14,
+        total: 114,
+        paymentMethod: 'CASH',
+        client: { id: 1, name: 'Cliente' },
+        pet: null,
+        saleItems: [{ nameSnapshot: 'Producto', quantity: 1, priceSnapshot: 100, subtotal: 100 }],
+        payments: [{ method: 'CASH', amount: 114 }],
+      };
+      mockSaleRepository.createTicketPrintAtomic.mockResolvedValue({
+        sale,
+        print: { id: 1, type: 'ORIGINAL', reprintNumber: 0 },
+      });
+
+      const result = await saleService.printSale(80, organizationId, 7);
+
+      expect(mockSaleRepository.createTicketPrintAtomic).toHaveBeenCalledWith({
+        saleId: 80,
+        clinicId: organizationId,
+        userId: 7,
+        reason: undefined,
+      });
+      expect(result.printData.type).toBe('TICKET ORIGINAL');
+      expect(result.printData.payments).toEqual([{ method: 'CASH', amount: 114 }]);
+    });
+
+    it('should label subsequent prints as duplicate', async () => {
+      mockSaleRepository.createTicketPrintAtomic.mockResolvedValue({
+        sale: { id: 81, saleItems: [], payments: [], total: 0 },
+        print: { id: 2, type: 'DUPLICATE', reprintNumber: 1 },
+      });
+
+      const result = await saleService.printSale(81, organizationId, 7, 'Cliente solicita copia');
+
+      expect(result.printData.type).toBe('TICKET DUPLICADO');
+      expect(result.printData.reprintNumber).toBe(1);
+    });
+  });
 });

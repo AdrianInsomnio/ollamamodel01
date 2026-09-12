@@ -15,10 +15,10 @@ const emptyTotals = () => ({
 });
 
 const toTotals = (metrics, clinicsCount) => ({
-  salesTodayTotal: metrics.today.total,
-  salesTodayTax: metrics.today.tax,
-  salesTodaySubtotal: metrics.today.subtotal,
-  salesTodayCount: metrics.today.count,
+  salesTodayTotal: getSalesToday(metrics).total,
+  salesTodayTax: getSalesToday(metrics).tax,
+  salesTodaySubtotal: getSalesToday(metrics).subtotal,
+  salesTodayCount: getSalesToday(metrics).count,
   openConsultations: metrics.openConsultations,
   closedConsultationsToday: metrics.closedConsultationsToday,
   activeClients: metrics.activeClients,
@@ -28,15 +28,22 @@ const toTotals = (metrics, clinicsCount) => ({
 
 const addMetrics = (acc, metrics) => ({
   ...acc,
-  salesTodayTotal: acc.salesTodayTotal + metrics.today.total,
-  salesTodayTax: acc.salesTodayTax + metrics.today.tax,
-  salesTodaySubtotal: acc.salesTodaySubtotal + metrics.today.subtotal,
-  salesTodayCount: acc.salesTodayCount + metrics.today.count,
+  salesTodayTotal: acc.salesTodayTotal + getSalesToday(metrics).total,
+  salesTodayTax: acc.salesTodayTax + getSalesToday(metrics).tax,
+  salesTodaySubtotal: acc.salesTodaySubtotal + getSalesToday(metrics).subtotal,
+  salesTodayCount: acc.salesTodayCount + getSalesToday(metrics).count,
   openConsultations: acc.openConsultations + metrics.openConsultations,
   closedConsultationsToday: acc.closedConsultationsToday + metrics.closedConsultationsToday,
   activeClients: acc.activeClients + metrics.activeClients,
   activePets: acc.activePets + metrics.activePets,
 });
+
+const getSalesToday = (metrics = {}) => metrics.today || metrics.salesToday || {
+  total: 0,
+  tax: 0,
+  subtotal: 0,
+  count: 0,
+};
 
 const requireAdminRole = (user) => {
   if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
@@ -195,7 +202,9 @@ const listClinics = async (user) => {
 };
 
 const listUsers = async (user) => {
-  requireAdminRole(user);
+  if (user.role !== "SUPER_ADMIN") {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
+  }
   const organization = await requireOrganization(user);
   const users = await repository.findUsersWithMetrics(organization.id);
   return {

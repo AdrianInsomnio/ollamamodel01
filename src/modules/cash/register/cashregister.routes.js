@@ -37,7 +37,7 @@ router.patch("/admin/registers/:id/status", adminOnly, updateAdminRegisterStatus
 /**
  * Listar cajas de la clínica
  */
-router.get("/", authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), getRegisters);
+router.get("/", authorize(ROLES.ADMIN, ROLES.USER, ROLES.SUPER_ADMIN), getRegisters);
 
 /**
  * Crear caja

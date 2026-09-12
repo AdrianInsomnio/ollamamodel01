@@ -40,4 +40,17 @@ router.delete(
   controller.cancel,
 );
 
+router.post(
+  '/:id/print',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  idempotency('POST /api/sales/:id/print'),
+  controller.print,
+);
+
+router.get(
+  '/:id/prints',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  controller.printHistory,
+);
+
 module.exports = router;

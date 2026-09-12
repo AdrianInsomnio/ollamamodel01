@@ -7,8 +7,8 @@ const create = async (data, clinicId) => {
     throw new AppError('Nombre y precio son requeridos', 400);
   }
 
-  if (data.price < 0) {
-    throw new AppError('El precio no puede ser negativo', 400);
+  if (data.price <= 0) {
+    throw new AppError('El precio debe ser mayor a 0', 400);
   }
 
   if (data.cost !== undefined && data.cost !== null && data.cost < 0) {
@@ -52,8 +52,8 @@ const update = async (id, clinicId, data) => {
   }
 
   // Validaciones
-  if (data.price !== undefined && data.price < 0) {
-    throw new AppError('El precio no puede ser negativo', 400);
+  if (data.price !== undefined && data.price <= 0) {
+    throw new AppError('El precio debe ser mayor a 0', 400);
   }
 
   if (data.cost !== undefined && data.cost < 0) {

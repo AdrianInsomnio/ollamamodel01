@@ -281,6 +281,41 @@ const cancelSaleLegacy = async (id, clinicId) => {
   return { message: 'Venta cancelada exitosamente' };
 };
 
+const buildPrintData = (sale, print) => ({
+  type: print.type === 'DUPLICATE' ? 'TICKET DUPLICADO' : 'TICKET ORIGINAL',
+  printType: print.type,
+  printId: print.id,
+  reprintNumber: print.reprintNumber,
+  saleId: sale.id,
+  client: sale.client,
+  pet: sale.pet,
+  items: sale.saleItems.map((item) => ({
+    name: item.nameSnapshot,
+    quantity: item.quantity,
+    price: item.priceSnapshot,
+    subtotal: item.subtotal,
+  })),
+  subtotal: sale.subtotal,
+  discount: sale.discount,
+  tax: sale.tax,
+  total: sale.total,
+  payments: sale.payments.filter((payment) => Number(payment.amount) > 0).map((payment) => ({
+    method: payment.method,
+    amount: Number(payment.amount),
+  })),
+});
+
+const printSale = async (saleId, clinicId, userId, reason) => {
+  const result = await repository.createTicketPrintAtomic({ saleId, clinicId, userId, reason });
+  return {
+    print: result.print,
+    sale: result.sale,
+    printData: buildPrintData(result.sale, result.print),
+  };
+};
+
+const getPrintHistory = async (saleId, clinicId) => repository.findTicketPrints(saleId, clinicId);
+
 const prepareModifiedItems = async (items, clinicId, clientName) => {
   if (!Array.isArray(items) || items.length === 0) throw new AppError('La venta debe incluir al menos un item', 400);
 
@@ -354,5 +389,7 @@ module.exports = {
   getSalesByClient,
   getSalesReport,
   updateSale,
-  cancelSale: cancelSalePhase4
+  cancelSale: cancelSalePhase4,
+  printSale,
+  getPrintHistory,
 };

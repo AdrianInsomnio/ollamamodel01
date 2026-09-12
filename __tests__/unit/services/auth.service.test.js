@@ -14,6 +14,7 @@ const mockAuthRepository = {
   findUserById: jest.fn(),
   createUser: jest.fn(),
   updatePassword: jest.fn(),
+  updateLastLogin: jest.fn(),
 };
 
 const mockUtils = {
@@ -263,6 +264,7 @@ describe('Auth Service', () => {
           username: mockUser.username,
           email: mockUser.email,
           role: mockUser.role,
+          lastLogin: expect.any(Date),
           clinics: mockUser.clinics,
         },
         token: mockToken,

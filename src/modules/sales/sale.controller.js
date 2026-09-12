@@ -46,4 +46,22 @@ const cancel = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, getById, update, cancel };
+const print = async (req, res, next) => {
+  try {
+    const result = await service.printSale(parseInt(req.params.id), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const printHistory = async (req, res, next) => {
+  try {
+    const prints = await service.getPrintHistory(parseInt(req.params.id), req.user.clinicId);
+    res.json({ prints });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getAll, getById, update, cancel, print, printHistory };
