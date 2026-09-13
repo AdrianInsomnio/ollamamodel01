@@ -1,6 +1,6 @@
 const { prisma } = require('../../lib/prisma');
 const { AppError } = require('../../core/errors/AppError');
-const { SALE_STATUS, LEGACY_SALE_STATUS, isDraftStatus, isWaitingStatus, isCancelledStatus, normalizeSaleStatus } = require('./sale.status');
+const { SALE_STATUS, LEGACY_SALE_STATUS, isDraftStatus, isWaitingStatus, isConfirmedStatus, isCancelledStatus, normalizeSaleStatus } = require('./sale.status');
 
 const create = async (data, clinicId) => {
   const { items, ...saleData } = data;
@@ -195,6 +195,113 @@ const createWaitingSaleAtomic = async ({ saleData, items, clinicId, userId, cash
   });
 };
 
+const transitionDraftToWaitingAtomic = async ({ id, saleData, items, clinicId, userId, cashShiftId }) => {
+  return prisma.$transaction(async (tx) => {
+    const shift = await tx.cashShift.findFirst({ where: { id: cashShiftId, clinicId, userId, status: 'OPEN' }, include: { cashRegister: true } });
+    if (!shift) throw new AppError('El turno de caja no existe, no pertenece a la clínica o está cerrado', 400, 'INVALID_CASH_SHIFT');
+    const draft = await tx.sale.findFirst({ where: { id, clinicId, userId, status: { in: [SALE_STATUS.DRAFT, LEGACY_SALE_STATUS.DRAFT] } } });
+    if (!draft) throw new AppError('Borrador no encontrado', 404, 'DRAFT_NOT_FOUND');
+
+    await tx.saleItem.deleteMany({ where: { saleId: id } });
+    const sale = await tx.sale.update({
+      where: { id },
+      data: { ...saleData, status: SALE_STATUS.WAITING, cashShiftId, userId, paymentMethod: null, updatedAt: new Date(), saleItems: { create: items } },
+      include: { client: { select: { id: true, name: true } }, pet: { select: { id: true, name: true } }, saleItems: true, payments: true, cashShift: { include: { cashRegister: true } } },
+    });
+    await tx.cashAuditEvent.create({ data: { action: 'SALE_WAITING', clinicId, userId, cashRegisterId: shift.cashRegisterId, cashShiftId, saleId: id, details: { status: SALE_STATUS.WAITING, fromStatus: SALE_STATUS.DRAFT, total: sale.total } } });
+    return sale;
+  });
+};
+
+const createDraftSaleAtomic = async ({ saleData, items, clinicId, userId }) => {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.sale.create({
+      data: {
+        ...saleData,
+        clinicId,
+        userId,
+        cashShiftId: null,
+        paymentMethod: null,
+        status: SALE_STATUS.DRAFT,
+        updatedAt: new Date(),
+        saleItems: { create: items },
+      },
+      include: {
+        client: { select: { id: true, name: true } },
+        pet: { select: { id: true, name: true } },
+        saleItems: true,
+        payments: true,
+      },
+    });
+
+    await tx.cashAuditEvent.create({
+      data: {
+        action: 'SALE_DRAFT_CREATED',
+        clinicId,
+        userId,
+        saleId: sale.id,
+        details: { status: SALE_STATUS.DRAFT, total: sale.total },
+      },
+    });
+
+    return sale;
+  });
+};
+
+const findDraftSales = async (clinicId, userId) => prisma.sale.findMany({
+  where: {
+    clinicId,
+    userId,
+    status: { in: [SALE_STATUS.DRAFT, LEGACY_SALE_STATUS.DRAFT] },
+  },
+  include: {
+    client: { select: { id: true, name: true } },
+    pet: { select: { id: true, name: true } },
+    saleItems: true,
+  },
+  orderBy: { updatedAt: 'desc' },
+});
+
+const updateDraftSaleAtomic = async ({ id, clinicId, userId, saleData, items }) => {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.sale.findFirst({
+      where: { id, clinicId, userId, status: { in: [SALE_STATUS.DRAFT, LEGACY_SALE_STATUS.DRAFT] } },
+      select: { id: true, status: true },
+    });
+    if (!current) throw new AppError('Borrador no encontrado', 404, 'DRAFT_NOT_FOUND');
+
+    await tx.saleItem.deleteMany({ where: { saleId: id } });
+    const sale = await tx.sale.update({
+      where: { id },
+      data: {
+        ...saleData,
+        status: SALE_STATUS.DRAFT,
+        cashShiftId: null,
+        paymentMethod: null,
+        payments: { deleteMany: {} },
+        saleItems: { create: items },
+      },
+      include: {
+        client: { select: { id: true, name: true } },
+        pet: { select: { id: true, name: true } },
+        saleItems: true,
+        payments: true,
+      },
+    });
+
+    await tx.cashAuditEvent.create({
+      data: {
+        action: 'SALE_DRAFT_AUTOSAVED',
+        clinicId,
+        userId,
+        saleId: id,
+        details: { status: SALE_STATUS.DRAFT, total: sale.total },
+      },
+    });
+    return sale;
+  });
+};
+
 const findWaitingSales = async (cashShiftId, clinicId) => prisma.sale.findMany({
   where: { cashShiftId, clinicId, status: { in: [SALE_STATUS.WAITING, LEGACY_SALE_STATUS.WAITING] } },
   include: {
@@ -324,14 +431,13 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
 
     if (!sale) throw new AppError('Venta no encontrada', 404);
     if (isCancelledStatus(sale.status)) throw new AppError('La venta ya está cancelada', 400, 'SALE_ALREADY_CANCELLED');
-    if (!sale.cashShift || sale.cashShift.status !== 'OPEN') {
+    const pendingSale = isWaitingStatus(sale.status) || isDraftStatus(sale.status);
+    if (!pendingSale && (!sale.cashShift || sale.cashShift.status !== 'OPEN')) {
       throw new AppError('No puede cancelarse este ticket porque el turno ya fue cerrado', 400, 'CASH_SHIFT_CLOSED');
     }
-    if (userId != null && sale.cashShift.userId !== userId) {
+    if (userId != null && (pendingSale ? sale.userId !== userId : sale.cashShift.userId !== userId)) {
       throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
     }
-
-    const pendingSale = isWaitingStatus(sale.status) || isDraftStatus(sale.status);
 
     await tx.$queryRaw`
       SELECT id
@@ -379,8 +485,8 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
         action: 'SALE_CANCELLED',
         clinicId,
         userId,
-        cashRegisterId: sale.cashShift.cashRegisterId,
-        cashShiftId: sale.cashShiftId,
+        cashRegisterId: sale.cashShift?.cashRegisterId || null,
+        cashShiftId: sale.cashShiftId || null,
         saleId: id,
         details: { reason: reason || null, reversedPaymentIds: sale.payments.map((payment) => payment.id) },
       },
@@ -390,6 +496,56 @@ const cancelSaleAtomic = async ({ id, clinicId, userId, reason }) => {
       where: { id, clinicId },
       include: { saleItems: true, payments: true, cashShift: true },
     });
+  });
+};
+
+const correctSaleAtomic = async ({ id, clinicId, userId, reason, saleData, items }) => {
+  return prisma.$transaction(async (tx) => {
+    const original = await tx.sale.findFirst({
+      where: { id, clinicId },
+      include: { saleItems: true, payments: true, cashShift: { include: { cashRegister: true } } },
+    });
+    if (!original) throw new AppError('Venta no encontrada', 404);
+    if (!isConfirmedStatus(original.status)) throw new AppError('Solo pueden corregirse ventas confirmadas', 400, 'SALE_NOT_CONFIRMED');
+    if (!original.cashShift || original.cashShift.status !== 'OPEN') throw new AppError('No puede corregirse una venta con turno cerrado', 400, 'CASH_SHIFT_CLOSED');
+    if (userId != null && original.cashShift.userId !== userId) throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
+
+    await tx.$queryRaw`SELECT id FROM sales WHERE id = ${id} AND clinicId = ${clinicId} FOR UPDATE`;
+    await tx.sale.update({ where: { id }, data: { status: SALE_STATUS.CANCELLED } });
+
+    for (const item of original.saleItems) {
+      if (item.itemType !== 'product') continue;
+      await tx.product.update({ where: { id: item.itemId }, data: { stock: { increment: item.quantity } } });
+      await tx.stockMovement.create({ data: {
+        productId: item.itemId, type: 'adjustment', quantity: item.quantity,
+        reason: 'Corrección de venta', referenceType: 'sale', referenceId: id,
+        notes: reason || `Reversión para corregir venta #${id}`,
+      } });
+    }
+    for (const payment of original.payments) {
+      await tx.payment.create({ data: {
+        id: require('node:crypto').randomUUID(), saleId: id, cashShiftId: original.cashShiftId,
+        amount: -Number(payment.amount), method: payment.method,
+        reference: `CORRECTION:${payment.id}`, notes: reason || `Reversión para corregir venta #${id}`,
+      } });
+    }
+
+    const waiting = await tx.sale.create({
+      data: {
+        ...saleData, clinicId, userId, cashShiftId: original.cashShiftId,
+        status: SALE_STATUS.WAITING, paymentMethod: null, updatedAt: new Date(),
+        notes: saleData.notes || `Corrección de venta #${id}`,
+        saleItems: { create: items },
+      },
+      include: { client: { select: { id: true, name: true } }, pet: { select: { id: true, name: true } }, saleItems: true, payments: true, cashShift: { include: { cashRegister: true } } },
+    });
+
+    await tx.cashAuditEvent.create({ data: {
+      action: 'SALE_CORRECTED', clinicId, userId,
+      cashRegisterId: original.cashShift.cashRegisterId, cashShiftId: original.cashShiftId, saleId: id,
+      details: { reason: reason || null, correctionSaleId: waiting.id, reversedPaymentIds: original.payments.map((payment) => payment.id) },
+    } });
+    return { original: { ...original, status: SALE_STATUS.CANCELLED }, waiting };
   });
 };
 
@@ -406,14 +562,21 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
 
     if (!sale) throw new AppError('Venta no encontrada', 404);
     if (isCancelledStatus(sale.status)) throw new AppError('No puede modificarse una venta cancelada', 400, 'SALE_ALREADY_CANCELLED');
-    if (!sale.cashShift || sale.cashShift.status !== 'OPEN') {
+    const pendingSale = isWaitingStatus(sale.status) || isDraftStatus(sale.status);
+    const effectiveCashShiftId = pendingSale
+      ? (saleData.cashShiftId || sale.cashShiftId || null)
+      : (sale.cashShiftId || null);
+    const effectiveShift = effectiveCashShiftId === sale.cashShiftId
+      ? sale.cashShift
+      : effectiveCashShiftId
+        ? await tx.cashShift.findFirst({ where: { id: effectiveCashShiftId, clinicId, status: 'OPEN' } })
+        : null;
+    if (!effectiveShift || effectiveShift.status !== 'OPEN') {
       throw new AppError('No puede modificarse este ticket porque el turno ya fue cerrado', 400, 'CASH_SHIFT_CLOSED');
     }
-    if (userId != null && sale.cashShift.userId !== userId) {
+    if (userId != null && effectiveShift.userId !== userId) {
       throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
     }
-
-    const pendingSale = isWaitingStatus(sale.status) || isDraftStatus(sale.status);
 
     await tx.$queryRaw`
       SELECT id
@@ -466,6 +629,8 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
       where: { id },
       data: {
         ...saleData,
+        cashShiftId: effectiveCashShiftId,
+        userId,
         saleItems: { create: items },
         payments: {
           create: payments.map((payment) => ({
@@ -474,7 +639,7 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
             method: payment.method,
             reference: payment.reference,
             notes: payment.notes,
-            cashShiftId: sale.cashShiftId,
+            cashShiftId: effectiveCashShiftId,
           })),
         },
       },
@@ -536,6 +701,10 @@ module.exports = {
   create,
   createWithStockMovements,
   createWaitingSaleAtomic,
+  transitionDraftToWaitingAtomic,
+  createDraftSaleAtomic,
+  findDraftSales,
+  updateDraftSaleAtomic,
   findWaitingSales,
   resumeWaitingSaleAtomic,
   findAll,
@@ -543,6 +712,7 @@ module.exports = {
   createTicketPrintAtomic,
   findTicketPrints,
   cancelSaleAtomic,
+  correctSaleAtomic,
   updateSaleAtomic,
   getSalesByClient,
   getTotalSalesByPeriod

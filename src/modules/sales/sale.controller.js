@@ -55,6 +55,24 @@ const waiting = async (req, res, next) => {
   }
 };
 
+const draft = async (req, res, next) => {
+  try {
+    const sale = await service.createDraftSale(req.body, req.user.clinicId, req.user.id);
+    res.status(201).json({ sale });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getDrafts = async (req, res, next) => {
+  try {
+    const sales = await service.getDraftSales(req.user.clinicId, req.user.id);
+    res.json({ sales });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getWaiting = async (req, res, next) => {
   try {
     const sales = await service.getWaitingSales(Number(req.query.cashShiftId), req.user.clinicId, req.user.id);
@@ -82,6 +100,15 @@ const cancel = async (req, res, next) => {
   }
 };
 
+const correct = async (req, res, next) => {
+  try {
+    const result = await service.correctSale(saleIdFromRequest(req), req.body, req.user.clinicId, req.user.id);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const print = async (req, res, next) => {
   try {
     const result = await service.printSale(saleIdFromRequest(req), req.user.clinicId, req.user.id, req.body?.reason || req.body?.motivo);
@@ -100,4 +127,4 @@ const printHistory = async (req, res, next) => {
   }
 };
 
-module.exports = { create, waiting, getWaiting, resume, getAll, getById, update, cancel, print, printHistory };
+module.exports = { create, draft, getDrafts, waiting, getWaiting, resume, getAll, getById, update, cancel, correct, print, printHistory };

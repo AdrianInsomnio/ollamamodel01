@@ -307,6 +307,47 @@ describe('Sale Service', () => {
     });
   });
 
+  describe('correction flow', () => {
+    it('rejects correction of a non-confirmed sale', async () => {
+      mockSaleRepository.findById.mockResolvedValue({ id: 44, status: 'WAITING' });
+
+      await expect(saleService.correctSale(44, { items: [] }, organizationId, 7))
+        .rejects.toMatchObject({ code: 'SALE_NOT_CONFIRMED' });
+      expect(mockSaleRepository.correctSaleAtomic).not.toHaveBeenCalled();
+    });
+
+    it('creates a new WAITING account through the atomic correction operation', async () => {
+      const saleId = 44;
+      mockSaleRepository.findById.mockResolvedValue({
+        id: saleId,
+        status: 'CONFIRMED',
+        clientId: mockClient.id,
+        petId: null,
+        consultationId: null,
+      });
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([mockProduct]);
+      mockSaleRepository.correctSaleAtomic.mockResolvedValue({
+        original: { id: saleId, status: 'CANCELLED' },
+        waiting: { id: 45, status: 'WAITING' },
+      });
+
+      const result = await saleService.correctSale(saleId, {
+        items: [{ itemType: 'product', itemId: mockProduct.id, quantity: 1 }],
+        reason: 'Producto incorrecto',
+      }, organizationId, 7);
+
+      expect(result.waiting.status).toBe('WAITING');
+      expect(mockSaleRepository.correctSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
+        id: saleId,
+        clinicId: organizationId,
+        userId: 7,
+        reason: 'Producto incorrecto',
+        items: [expect.objectContaining({ itemType: 'product', itemId: mockProduct.id })],
+      }));
+    });
+  });
+
   describe('getById', () => {
     it('debería retornar una venta por ID', async () => {
       // Arrange
@@ -353,6 +394,34 @@ describe('Sale Service', () => {
   });
 
   describe('updateSale', () => {
+    it('retoma un DRAFT con el turno abierto actual aunque conserve un turno cerrado', async () => {
+      const saleId = 46;
+      const productWithPrice = { ...mockProduct, price: 100, stock: 10 };
+      mockSaleRepository.findById.mockResolvedValue({
+        id: saleId,
+        status: 'DRAFT',
+        cashShiftId: 9,
+        cashShift: { status: 'CLOSED' },
+        client: { name: 'Cliente' },
+      });
+      mockCashRegisterRepository.findShiftById.mockResolvedValue({ id: 8, status: 'OPEN' });
+      mockProductRepository.findByIds.mockResolvedValue([productWithPrice]);
+      mockSaleRepository.updateSaleAtomic.mockResolvedValue({ id: saleId, status: 'CONFIRMED' });
+
+      await saleService.updateSale(saleId, {
+        items: [{ itemType: 'product', itemId: productWithPrice.id, quantity: 1 }],
+        paymentMethod: 'cash',
+        cashShiftId: 8,
+        payments: [{ method: 'cash', amount: 114 }],
+        discount: 0,
+      }, organizationId, 7);
+
+      expect(mockCashRegisterRepository.findShiftById).toHaveBeenCalledWith(8, organizationId, 7);
+      expect(mockSaleRepository.updateSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
+        saleData: expect.objectContaining({ cashShiftId: 8, status: 'CONFIRMED' }),
+      }));
+    });
+
     it('should reject modifications when the associated shift is closed', async () => {
       const saleId = 44;
       mockSaleRepository.findById.mockResolvedValue({

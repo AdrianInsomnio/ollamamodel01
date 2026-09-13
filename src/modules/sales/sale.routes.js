@@ -27,6 +27,19 @@ router.post(
   controller.waiting,
 );
 
+router.post(
+  '/drafts',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  idempotency('POST /api/sales/drafts'),
+  controller.draft,
+);
+
+router.get(
+  '/drafts',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  controller.getDrafts,
+);
+
 router.get(
   '/waiting',
   authorize(ROLES.ADMIN, ROLES.USER),
@@ -55,6 +68,13 @@ router.delete(
   authorize(ROLES.ADMIN, ROLES.USER),
   idempotency('DELETE /api/sales/:id'),
   controller.cancel,
+);
+
+router.post(
+  '/:id/correct',
+  authorize(ROLES.ADMIN, ROLES.USER),
+  idempotency('POST /api/sales/:id/correct'),
+  controller.correct,
 );
 
 router.post(

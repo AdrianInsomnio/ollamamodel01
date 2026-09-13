@@ -4,9 +4,20 @@ const clientRepository = require('../clients/client.repository');
 const cashRegisterRepository = require('../cash/register/cashregister.repository');
 const { AppError } = require('../../core/errors/AppError');
 const { prisma } = require('../../lib/prisma');
-const { SALE_STATUS, isCancelledStatus, normalizeSaleStatus } = require('./sale.status');
+const { SALE_STATUS, isCancelledStatus, isConfirmedStatus, normalizeSaleStatus } = require('./sale.status');
 
 const TAX_RATE = 0.14; // IVA 14% en Uruguay
+
+const calculateSaleTotals = (items, discountRateInput = 0) => {
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const discountRate = Number(discountRateInput ?? 0);
+  if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) {
+    throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
+  }
+  const discount = subtotal * discountRate / 100;
+  const tax = (subtotal - discount) * TAX_RATE;
+  return { subtotal, discount, tax, total: subtotal - discount + tax };
+};
 
 const PAYMENT_METHODS = new Set([
   'CASH',
@@ -34,6 +45,13 @@ const PAYMENT_METHOD_ALIASES = {
   mercado_pago: 'MERCADO_PAGO',
   mercadopago: 'MERCADO_PAGO',
   account_credit: 'ACCOUNT_CREDIT',
+};
+
+const getServiceMap = async (items, clinicId) => {
+  const serviceIds = items.filter((item) => item.itemType === 'service').map((item) => item.itemId);
+  if (!serviceIds.length) return new Map();
+  const services = await prisma.service.findMany({ where: { id: { in: serviceIds }, clinicId } });
+  return new Map(services.map((service) => [service.id, service]));
 };
 
 const normalizePaymentMethod = (value) => {
@@ -113,6 +131,7 @@ const createSale = async (saleData, clinicId) => {
 
   // Crear mapa de productos para validación rápida
   const productMap = new Map(products.map(p => [p.id, p]));
+  const serviceMap = await getServiceMap(items, clinicId);
 
   // Validar stock y preparar items
   const processedItems = [];
@@ -152,14 +171,15 @@ const createSale = async (saleData, clinicId) => {
         notes: `Venta a cliente ${client.name}`
       });
     } else if (item.itemType === 'service') {
-      // Para servicios, asumir que vienen con precio y nombre
+      const service = serviceMap.get(item.itemId);
+      if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
       processedItems.push({
         itemType: 'service',
         itemId: item.itemId,
-        nameSnapshot: item.nameSnapshot,
-        priceSnapshot: item.priceSnapshot,
+        nameSnapshot: service.name,
+        priceSnapshot: service.price,
         quantity: item.quantity,
-        subtotal: item.priceSnapshot * item.quantity
+        subtotal: service.price * item.quantity
       });
     }
   }
@@ -325,6 +345,7 @@ const prepareWaitingItems = async (items, clinicId) => {
   const productIds = items.filter((item) => item.itemType === 'product').map((item) => item.itemId);
   const products = await productRepository.findByIds(productIds, clinicId);
   const productMap = new Map(products.map((product) => [product.id, product]));
+  const serviceMap = await getServiceMap(items, clinicId);
 
   return items.map((item) => {
     const quantity = Number(item.quantity);
@@ -348,9 +369,9 @@ const prepareWaitingItems = async (items, clinicId) => {
     }
 
     if (item.itemType === 'service') {
-      const price = Number(item.priceSnapshot);
-      if (!item.nameSnapshot || !Number.isFinite(price) || price < 0) throw new AppError('Servicio inválido', 400);
-      return { itemType: 'service', itemId: item.itemId, nameSnapshot: item.nameSnapshot, priceSnapshot: price, quantity, subtotal: price * quantity };
+      const service = serviceMap.get(item.itemId);
+      if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
+      return { itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, priceSnapshot: service.price, quantity, subtotal: service.price * quantity };
     }
 
     throw new AppError('Tipo de item inválido', 400, 'INVALID_SALE_ITEM');
@@ -377,14 +398,41 @@ const createWaitingSale = async (saleData, clinicId, userId) => {
   const tax = (subtotal - discount) * TAX_RATE;
   const total = subtotal - discount + tax;
 
-  const sale = await repository.createWaitingSaleAtomic({
-    saleData: { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null },
+  const waitingPayload = { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null };
+  const sale = saleData.draftId
+    ? await repository.transitionDraftToWaitingAtomic({ id: Number(saleData.draftId), saleData: waitingPayload, items, clinicId, userId, cashShiftId })
+    : await repository.createWaitingSaleAtomic({ saleData: waitingPayload, items, clinicId, userId, cashShiftId });
+  return { ...sale, status: normalizeSaleStatus(sale.status) };
+};
+
+const createDraftSale = async (saleData, clinicId, userId) => {
+  const client = await clientRepository.findById(saleData.clientId, clinicId);
+  if (!client) throw new AppError('Cliente no encontrado', 404);
+  if (saleData.petId) {
+    const pet = await prisma.pet.findFirst({ where: { id: saleData.petId, clientId: saleData.clientId } });
+    if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
+  }
+
+  const items = await prepareWaitingItems(saleData.items, clinicId);
+  const totals = calculateSaleTotals(items, saleData.discount);
+  const sale = await repository.createDraftSaleAtomic({
+    saleData: {
+      clientId: saleData.clientId,
+      petId: saleData.petId || null,
+      consultationId: saleData.consultationId || null,
+      ...totals,
+      notes: saleData.notes || null,
+    },
     items,
     clinicId,
     userId,
-    cashShiftId,
   });
   return { ...sale, status: normalizeSaleStatus(sale.status) };
+};
+
+const getDraftSales = async (clinicId, userId) => {
+  const sales = await repository.findDraftSales(clinicId, userId);
+  return sales.map((sale) => ({ ...sale, status: normalizeSaleStatus(sale.status) }));
 };
 
 const getWaitingSales = async (cashShiftId, clinicId, userId) => {
@@ -407,6 +455,7 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
   const productIds = items.filter((item) => item.itemType === 'product').map((item) => item.itemId);
   const products = await productRepository.findByIds(productIds, clinicId);
   const productMap = new Map(products.map((product) => [product.id, product]));
+  const serviceMap = await getServiceMap(items, clinicId);
   const processedItems = [];
   const stockMovements = [];
 
@@ -421,9 +470,9 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
       processedItems.push({ itemType: 'product', itemId: item.itemId, nameSnapshot: product.name, priceSnapshot: product.price, quantity, subtotal: product.price * quantity });
       stockMovements.push({ productId: item.itemId, type: 'out', quantity: -quantity, reason: 'Modificación de venta', notes: `Venta modificada por ${clientName}` });
     } else if (item.itemType === 'service') {
-      const price = Number(item.priceSnapshot);
-      if (!item.nameSnapshot || !Number.isFinite(price) || price < 0) throw new AppError('Servicio inválido', 400);
-      processedItems.push({ itemType: 'service', itemId: item.itemId, nameSnapshot: item.nameSnapshot, priceSnapshot: price, quantity, subtotal: price * quantity });
+      const service = serviceMap.get(item.itemId);
+      if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
+      processedItems.push({ itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, priceSnapshot: service.price, quantity, subtotal: service.price * quantity });
     } else {
       throw new AppError('Tipo de item inválido', 400, 'INVALID_SALE_ITEM');
     }
@@ -434,7 +483,31 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
 const updateSale = async (id, saleData, clinicId, userId) => {
   const sale = await getById(id, clinicId);
   if (isCancelledStatus(sale.status)) throw new AppError('No puede modificarse una venta cancelada', 400);
-  if (!sale.cashShiftId || !sale.cashShift || sale.cashShift.status !== 'OPEN') {
+  if (normalizeSaleStatus(sale.status) === SALE_STATUS.DRAFT && !saleData.paymentMethod && !saleData.confirm) {
+    const clientId = saleData.clientId ?? sale.clientId;
+    const petId = saleData.petId ?? sale.petId;
+    const client = await clientRepository.findById(clientId, clinicId);
+    if (!client) throw new AppError('Cliente no encontrado', 404);
+    if (petId) {
+      const pet = await prisma.pet.findFirst({ where: { id: petId, clientId } });
+      if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
+    }
+    const items = await prepareWaitingItems(saleData.items, clinicId);
+    const totals = calculateSaleTotals(items, saleData.discount);
+    const updated = await repository.updateDraftSaleAtomic({
+      id,
+      clinicId,
+      userId,
+      saleData: { ...totals, clientId, petId, consultationId: saleData.consultationId ?? sale.consultationId, notes: saleData.notes ?? sale.notes },
+      items,
+    });
+    return { ...updated, status: normalizeSaleStatus(updated.status) };
+  }
+  const effectiveCashShiftId = saleData.cashShiftId ?? sale.cashShiftId;
+  const effectiveShift = sale.cashShiftId === effectiveCashShiftId
+    ? sale.cashShift
+    : await cashRegisterRepository.findShiftById(Number(effectiveCashShiftId), clinicId, userId);
+  if (!effectiveCashShiftId || !effectiveShift || effectiveShift.status !== 'OPEN') {
     throw new AppError('No puede modificarse este ticket porque el turno ya fue cerrado', 400, 'CASH_SHIFT_CLOSED');
   }
 
@@ -445,13 +518,13 @@ const updateSale = async (id, saleData, clinicId, userId) => {
   const discount = subtotal * discountRate / 100;
   const tax = (subtotal - discount) * TAX_RATE;
   const total = subtotal - discount + tax;
-  const payments = normalizePayments({ ...saleData, cashShiftId: sale.cashShiftId }, total);
+  const payments = normalizePayments({ ...saleData, cashShiftId: effectiveCashShiftId }, total);
 
   return repository.updateSaleAtomic({
     id,
     clinicId,
     userId,
-    saleData: { subtotal, discount, tax, total, paymentMethod: payments[0].method, status: SALE_STATUS.CONFIRMED },
+    saleData: { subtotal, discount, tax, total, paymentMethod: payments[0].method, status: SALE_STATUS.CONFIRMED, cashShiftId: effectiveCashShiftId },
     items: processedItems,
     stockMovements,
     payments,
@@ -466,10 +539,30 @@ const cancelSalePhase4 = async (id, clinicId, userId, reason) => {
   return repository.cancelSaleAtomic({ id, clinicId, userId, reason });
 };
 
+const correctSale = async (id, saleData, clinicId, userId) => {
+  const original = await getById(id, clinicId);
+  if (!isConfirmedStatus(original.status)) throw new AppError('Solo pueden corregirse ventas confirmadas', 400, 'SALE_NOT_CONFIRMED');
+  const clientId = saleData.clientId ?? original.clientId;
+  const petId = saleData.petId ?? original.petId;
+  if (!await clientRepository.findById(clientId, clinicId)) throw new AppError('Cliente no encontrado', 404);
+  if (petId && !await prisma.pet.findFirst({ where: { id: petId, clientId } })) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
+  const items = await prepareWaitingItems(saleData.items, clinicId);
+  const totals = calculateSaleTotals(items, saleData.discount);
+  const result = await repository.correctSaleAtomic({
+    id, clinicId, userId,
+    reason: saleData.reason || saleData.motivo || null,
+    saleData: { clientId, petId, consultationId: saleData.consultationId ?? original.consultationId, ...totals, notes: saleData.notes || null },
+    items,
+  });
+  return { ...result, original: { ...result.original, status: SALE_STATUS.CANCELLED }, waiting: { ...result.waiting, status: SALE_STATUS.WAITING } };
+};
+
 module.exports = {
   create,
   createSale,
   createWaitingSale,
+  createDraftSale,
+  getDraftSales,
   getWaitingSales,
   resumeWaitingSale,
   getAll,
@@ -478,6 +571,7 @@ module.exports = {
   getSalesReport,
   updateSale,
   cancelSale: cancelSalePhase4,
+  correctSale,
   printSale,
   getPrintHistory,
 };
