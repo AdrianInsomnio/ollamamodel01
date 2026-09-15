@@ -12,6 +12,7 @@ jest.mock('../../../src/modules/admin/admin.repository', () => {
     findClinicsByOrganization: jest.fn(),
     findClinicsWithMetrics: jest.fn(),
     findUsersWithMetrics: jest.fn(),
+    updateUser: jest.fn(),
   };
 });
 
@@ -19,6 +20,9 @@ jest.mock('../../../src/lib/prisma', () => ({
   prisma: {
     organization: {
       findUnique: jest.fn(),
+    },
+    user: {
+      findFirst: jest.fn(),
     },
   },
 }));
@@ -293,16 +297,19 @@ describe('Admin Service - listUsers', () => {
 
   const baseOrganization = { id: 1, name: 'Org Test', timezone: 'America/Montevideo' };
 
-  it('deberia lanzar 403 si el rol no es SUPER_ADMIN', async () => {
-    await expect(
-      adminService.listUsers({ role: 'ADMIN', organizationId: 1 })
-    ).rejects.toMatchObject({ statusCode: 403 });
+  it('deberia lanzar 403 si el rol no es ADMIN ni SUPER_ADMIN', async () => {
     await expect(
       adminService.listUsers({ role: 'VET', organizationId: 1 })
     ).rejects.toMatchObject({ statusCode: 403 });
     await expect(
       adminService.listUsers({ role: 'USER', organizationId: 1 })
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('deberia exigir clinica al ADMIN', async () => {
+    await expect(
+      adminService.listUsers({ role: 'ADMIN', organizationId: 1, clinicId: null })
+    ).rejects.toMatchObject({ statusCode: 403, code: 'NO_CLINIC_ASSIGNED' });
   });
 
   it('deberia lanzar 404 si la organization no existe', async () => {
@@ -327,12 +334,78 @@ describe('Admin Service - listUsers', () => {
     expect(result.generatedAt).toBeDefined();
   });
 
+  it('deberia permitir al ADMIN listar solo los usuarios de su clinica', async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue(baseOrganization);
+    mockAdminRepository.findUsersWithMetrics.mockResolvedValue([
+      { id: 1, username: 'admin1', email: 'admin1@x.com', role: 'ADMIN', isActive: true, clinicCount: 1 },
+      { id: 2, username: 'vet1', email: 'vet1@x.com', role: 'VET', isActive: true, clinicCount: 1 },
+      { id: 3, username: 'user1', email: 'user1@x.com', role: 'USER', isActive: true, clinicCount: 1 },
+    ]);
+
+    const result = await adminService.listUsers({ role: 'ADMIN', organizationId: 1, clinicId: 7 });
+
+    expect(mockAdminRepository.findUsersWithMetrics).toHaveBeenCalledWith(1, 7);
+    expect(result.users.map((item) => item.role)).toEqual(['ADMIN', 'VET', 'USER']);
+  });
+
   it('deberia devolver lista vacia si la org no tiene usuarios', async () => {
     mockPrisma.organization.findUnique.mockResolvedValue(baseOrganization);
     mockAdminRepository.findUsersWithMetrics.mockResolvedValue([]);
 
     const result = await adminService.listUsers({ role: 'SUPER_ADMIN', organizationId: 1 });
     expect(result.users).toEqual([]);
+  });
+});
+
+describe('Admin Service - updateUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('permite al ADMIN editar un usuario de su misma clinica', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: 21 });
+    mockAdminRepository.updateUser.mockResolvedValue({ id: 21, role: 'USER', username: 'usuario-editado' });
+
+    const result = await adminService.updateUser(
+      21,
+      { username: 'usuario-editado', isActive: true },
+      { role: 'ADMIN', organizationId: 1, clinicId: 7 },
+    );
+
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 21,
+        organizationId: 1,
+        role: { in: ['ADMIN', 'USER', 'VET'] },
+        clinics: { some: { id: 7 } },
+      },
+      select: { id: true },
+    });
+    expect(mockAdminRepository.updateUser).toHaveBeenCalledWith(21, { username: 'usuario-editado', isActive: true });
+    expect(result.username).toBe('usuario-editado');
+  });
+
+  it('impide al ADMIN editar un usuario de otra clinica', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(adminService.updateUser(
+      22,
+      { username: 'fuera-de-clinica' },
+      { role: 'ADMIN', organizationId: 1, clinicId: 7 },
+    )).rejects.toMatchObject({ statusCode: 404 });
+
+    expect(mockAdminRepository.updateUser).not.toHaveBeenCalled();
+  });
+
+  it('impide al ADMIN convertir una cuenta en SUPER_ADMIN', async () => {
+    await expect(adminService.updateUser(
+      23,
+      { role: 'SUPER_ADMIN' },
+      { role: 'ADMIN', organizationId: 1, clinicId: 7 },
+    )).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    expect(mockAdminRepository.updateUser).not.toHaveBeenCalled();
   });
 });
 

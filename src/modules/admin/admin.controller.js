@@ -21,6 +21,22 @@ const getClinics = async (req, res, next) => {
   }
 };
 
+const getClinicSettings = async (req, res, next) => {
+  try {
+    res.json({ clinic: await service.getClinicSettings(req.user) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateClinicSettings = async (req, res, next) => {
+  try {
+    res.json({ clinic: await service.updateClinicSettings(req.user, req.body) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getUsers = async (req, res, next) => {
   try {
     const user = req.user;
@@ -80,6 +96,8 @@ const updateUserClinics = async (req, res, next) => {
 module.exports = {
   getDashboardMetrics,
   getClinics,
+  getClinicSettings,
+  updateClinicSettings,
   getUsers,
   createUser,
   updateUser,

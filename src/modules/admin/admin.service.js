@@ -201,12 +201,45 @@ const listClinics = async (user) => {
   };
 };
 
+const getClinicSettings = async (user) => {
+  requireAdminRole(user);
+  if (user.clinicId === undefined || user.clinicId === null) {
+    throw new AppError("User has no clinic assigned", 403, "NO_CLINIC_ASSIGNED");
+  }
+  const clinic = await repository.findClinicSettings(user.clinicId, user.organizationId);
+  if (!clinic) throw new AppError("Clinic not found", 404);
+  return clinic;
+};
+
+const updateClinicSettings = async (user, data) => {
+  requireAdminRole(user);
+  if (user.clinicId === undefined || user.clinicId === null) {
+    throw new AppError("User has no clinic assigned", 403, "NO_CLINIC_ASSIGNED");
+  }
+  const allowedFields = ["name", "rut", "website", "address", "phone", "email", "timezone", "imageUrl", "imagePublicId", "imageVersion"];
+  const updateData = Object.fromEntries(
+    allowedFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
+      .map((field) => [field, data[field] === "" ? null : data[field]])
+  );
+  if (typeof updateData.name === "string" && !updateData.name.trim()) {
+    throw new AppError("Clinic name is required", 400, "CLINIC_NAME_REQUIRED");
+  }
+  const clinic = await repository.updateClinicSettings(user.clinicId, user.organizationId, updateData);
+  if (!clinic) throw new AppError("Clinic not found", 404);
+  return clinic;
+};
+
 const listUsers = async (user) => {
-  if (user.role !== "SUPER_ADMIN") {
+  if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
     throw new AppError("Access denied", 403, "FORBIDDEN");
   }
+  const clinicId = user.role === "ADMIN" ? user.clinicId : null;
+  if (user.role === "ADMIN" && (clinicId === undefined || clinicId === null)) {
+    throw new AppError("User has no clinic assigned", 403, "NO_CLINIC_ASSIGNED");
+  }
   const organization = await requireOrganization(user);
-  const users = await repository.findUsersWithMetrics(organization.id);
+  const users = await repository.findUsersWithMetrics(organization.id, clinicId);
   return {
     organization: { id: organization.id, name: organization.name },
     users,
@@ -231,11 +264,22 @@ const updateUser = async (id, data, actor) => {
   }
   // For ADMIN, validate that user belongs to their organization
   if (actor.role === "ADMIN") {
-    const existingUser = await prisma.user.findUnique({
-      where: { id: Number(id) },
-      select: { organizationId: true },
+    if (actor.clinicId === undefined || actor.clinicId === null) {
+      throw new AppError("User has no clinic assigned", 403, "NO_CLINIC_ASSIGNED");
+    }
+    if (data.role === "SUPER_ADMIN") {
+      throw new AppError("Access denied", 403, "FORBIDDEN");
+    }
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        id: Number(id),
+        organizationId: actor.organizationId,
+        role: { in: ["ADMIN", "USER", "VET"] },
+        clinics: { some: { id: Number(actor.clinicId) } },
+      },
+      select: { id: true },
     });
-    if (!existingUser || existingUser.organizationId !== actor.organizationId) {
+    if (!existingUser) {
       throw new AppError("User not found", 404);
     }
   }
@@ -274,6 +318,8 @@ const updateUserClinics = async (userId, clinicIds) => {
 module.exports = {
   getDashboardMetrics,
   listClinics,
+  getClinicSettings,
+  updateClinicSettings,
   listUsers,
   createUser,
   updateUser,

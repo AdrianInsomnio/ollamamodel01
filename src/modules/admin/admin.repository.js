@@ -41,6 +41,40 @@ const findClinicsWithMetrics = async (organizationId, timezone) => {
   return [{ ...clinic, metrics }];
 };
 
+const findClinicSettings = async (clinicId, organizationId) => prisma.clinic.findFirst({
+  where: {
+    id: Number(clinicId),
+    organizationId: Number(organizationId),
+  },
+  select: {
+    id: true,
+    name: true,
+    rut: true,
+    website: true,
+    imageUrl: true,
+    imagePublicId: true,
+    imageVersion: true,
+    address: true,
+    phone: true,
+    email: true,
+    isActive: true,
+    timezone: true,
+    organizationId: true,
+  },
+});
+
+const updateClinicSettings = async (clinicId, organizationId, data) => {
+  const result = await prisma.clinic.updateMany({
+    where: {
+      id: Number(clinicId),
+      organizationId: Number(organizationId),
+    },
+    data,
+  });
+  if (result.count === 0) return null;
+  return findClinicSettings(clinicId, organizationId);
+};
+
 /**
  * Obtiene métricas de una clínica.
  * Si no hay datos, retorna ceros (el frontend mostrará "Sin Datos para mostrar").
@@ -102,9 +136,18 @@ const getClinicMetrics = async (clinicId, start, end) => {
   };
 };
 
-const findUsersWithMetrics = async (organizationId) => {
+const findUsersWithMetrics = async (organizationId, clinicId = null) => {
+  const where = {
+    organizationId: Number(organizationId),
+    role: { in: ["ADMIN", "USER", "VET"] },
+  };
+
+  if (clinicId !== undefined && clinicId !== null) {
+    where.clinics = { some: { id: Number(clinicId) } };
+  }
+
   return await prisma.user.findMany({
-    where: { organizationId: Number(organizationId) },
+    where,
     select: {
       id: true,
       username: true,
@@ -196,6 +239,8 @@ const updateUserClinics = async (userId, clinicIds) => {
 module.exports = {
   findClinicsByOrganization,
   findClinicsWithMetrics,
+  findClinicSettings,
+  updateClinicSettings,
   getClinicMetrics,
   findUsersWithMetrics,
   getDayRangeInTimezone,

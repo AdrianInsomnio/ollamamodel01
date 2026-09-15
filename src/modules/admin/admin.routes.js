@@ -10,6 +10,8 @@ router.use(authorize('ADMIN', 'SUPER_ADMIN'));
 
 router.get('/dashboard/metrics', controller.getDashboardMetrics);
 router.get('/clinics', controller.getClinics);
+router.get('/clinic', controller.getClinicSettings);
+router.put('/clinic', controller.updateClinicSettings);
 
 // Listado de usuarios: ADMIN y SUPER_ADMIN.
 router.get('/users', controller.getUsers);
