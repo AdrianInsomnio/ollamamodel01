@@ -17,6 +17,7 @@ const adminRoutes = require('../modules/admin/admin.routes');
 const consultorioRoutes = require('../modules/consultorios/consultorio.routes');
 const equipmentRoutes = require('../modules/equipment/equipment.routes');
 const categoryRoutes = require('../modules/product-categories/category.routes');
+const subscriptionRoutes = require('../modules/subscriptions/subscription.routes');
 module.exports = (app) => {
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
@@ -36,4 +37,5 @@ module.exports = (app) => {
   app.use('/api/consultorios', consultorioRoutes);
   app.use('/api/equipment', equipmentRoutes);
   app.use('/api/product-categories', categoryRoutes);
+  app.use('/api', subscriptionRoutes);
 };

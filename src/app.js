@@ -33,10 +33,18 @@ app.use('/api', limiter);
 // Auth rate limiting (more strict)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // limit each IP to 50 requests per windowMs for auth endpoints
-  message: { error: 'Too many authentication attempts, please try again later' }
+  max: 50, // limit each IP to 50 failed login attempts per windowMs
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (req, res, _next, options) => {
+    res.status(options.statusCode).json({
+      code: 'AUTH_RATE_LIMITED',
+      message: 'Demasiados intentos de inicio de sesión. Intenta nuevamente en unos minutos.',
+    });
+  },
 });
-app.use('/api/auth', authLimiter);
+app.use('/api/auth/login', authLimiter);
 
 // Health check
 app.get('/health', (req, res) => {

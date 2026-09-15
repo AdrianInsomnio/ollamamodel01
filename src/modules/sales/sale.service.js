@@ -6,17 +6,51 @@ const { AppError } = require('../../core/errors/AppError');
 const { prisma } = require('../../lib/prisma');
 const { SALE_STATUS, isCancelledStatus, isConfirmedStatus, normalizeSaleStatus } = require('./sale.status');
 
-const TAX_RATE = 0.14; // IVA 14% en Uruguay
+const TAX_RATE = 0.22; // IVA básico vigente para este MVP
+
+const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+const calculateFiscalAmounts = ({ unitPrice, quantity, ivaIncluded = true, ivaRate = TAX_RATE }) => {
+  const priceCents = Math.round(Number(unitPrice) * 100);
+  const quantityNumber = Number(quantity);
+  const rate = Number(ivaRate);
+  if (!Number.isInteger(quantityNumber) || quantityNumber <= 0) {
+    throw new AppError('La cantidad debe ser mayor a cero', 400, 'INVALID_QUANTITY');
+  }
+  if (!Number.isFinite(priceCents) || priceCents < 0) {
+    throw new AppError('El precio debe ser válido y no negativo', 400, 'INVALID_PRICE');
+  }
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new AppError('La tasa de IVA no es válida', 400, 'INVALID_TAX_RATE');
+  }
+  const lineTotalCents = priceCents * quantityNumber;
+  const netCents = ivaIncluded
+    ? Math.round(lineTotalCents / (1 + rate))
+    : lineTotalCents;
+  const taxCents = ivaIncluded
+    ? lineTotalCents - netCents
+    : Math.round(netCents * rate);
+  return {
+    quantity: quantityNumber,
+    unitPrice: priceCents / 100,
+    priceSnapshot: priceCents / 100,
+    ivaIncluded: ivaIncluded !== false,
+    ivaRate: rate * 100,
+    netAmount: netCents / 100,
+    taxAmount: taxCents / 100,
+    subtotal: lineTotalCents / 100,
+  };
+};
 
 const calculateSaleTotals = (items, discountRateInput = 0) => {
-  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const subtotal = roundMoney(items.reduce((sum, item) => sum + (item.netAmount ?? item.subtotal), 0));
   const discountRate = Number(discountRateInput ?? 0);
   if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) {
     throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
   }
-  const discount = subtotal * discountRate / 100;
-  const tax = (subtotal - discount) * TAX_RATE;
-  return { subtotal, discount, tax, total: subtotal - discount + tax };
+  const discount = roundMoney(subtotal * discountRate / 100);
+  const tax = roundMoney(items.reduce((sum, item) => sum + (item.taxAmount ?? 0), 0) * (1 - discountRate / 100));
+  return { subtotal, discount, tax, total: roundMoney(subtotal - discount + tax) };
 };
 
 const PAYMENT_METHODS = new Set([
@@ -100,10 +134,18 @@ const create = async (data, clinicId) => {
 };
 
 const createSale = async (saleData, clinicId) => {
-  const { clientId, petId, consultationId, items, discount = 0, cashShiftId, userId } = saleData;
+  const { clientId, petId, consultationId, subscriptionInstallmentIds = [], discount = 0, cashShiftId, userId } = saleData;
+  const items = Array.isArray(saleData.items) ? saleData.items : [];
+  const installmentIds = [...new Set((Array.isArray(subscriptionInstallmentIds) ? subscriptionInstallmentIds : []).map((id) => Number(id)))];
 
-  if (!Array.isArray(items) || items.length === 0) {
+  if (!items.length && !installmentIds.length) {
     throw new AppError('La venta debe incluir al menos un item', 400);
+  }
+  if (installmentIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    throw new AppError('Las cuotas seleccionadas son inválidas', 400, 'INVALID_INSTALLMENT_ID');
+  }
+  if (items.length && installmentIds.length) {
+    throw new AppError('No se pueden mezclar cuotas con productos o servicios en la misma operación', 400, 'SUBSCRIPTION_MIX_NOT_SUPPORTED');
   }
 
   // Validar que el cliente existe
@@ -115,11 +157,45 @@ const createSale = async (saleData, clinicId) => {
   // Validar mascota si se proporciona
   if (petId) {
     const pet = await prisma.pet.findFirst({
-      where: { id: petId, clinicId, clientId }
+      // Pet no tiene clinicId propio; la clínica se deriva del cliente.
+      where: { id: petId, clientId, client: { clinicId } }
     });
     if (!pet) {
       throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
     }
+  }
+
+  let installmentItems = [];
+  if (installmentIds.length) {
+    const installments = await prisma.subscriptionInstallment.findMany({
+      where: {
+        id: { in: installmentIds },
+        clinicId,
+        status: 'PENDING',
+        subscription: { clientId },
+      },
+      include: { subscription: { include: { medicalPlan: true } } },
+    });
+    if (installments.length !== installmentIds.length) {
+      throw new AppError('Una o más cuotas ya no están pendientes o no pertenecen al cliente', 409, 'INSTALLMENT_NOT_AVAILABLE');
+    }
+    const subscriptionIds = [...new Set(installments.map((item) => item.subscriptionId))];
+    if (subscriptionIds.length !== 1) {
+      throw new AppError('Las cuotas seleccionadas deben pertenecer a la misma suscripción', 400, 'MULTIPLE_SUBSCRIPTIONS_NOT_SUPPORTED');
+    }
+    installmentItems = installments.map((installment) => ({
+      itemType: 'subscription_installment',
+      itemId: installment.id,
+      nameSnapshot: `Cuota ${installment.periodStart.toISOString().slice(0, 10)} - ${installment.periodEnd.toISOString().slice(0, 10)}`,
+      priceSnapshot: Number(installment.totalAmount),
+      unitPrice: Number(installment.totalAmount),
+      ivaIncluded: false,
+      ivaRate: 0,
+      netAmount: Number(installment.totalAmount),
+      taxAmount: 0,
+      quantity: 1,
+      subtotal: Number(installment.totalAmount),
+    }));
   }
 
   // Validar y obtener productos
@@ -148,8 +224,16 @@ const createSale = async (saleData, clinicId) => {
         throw new AppError(`Producto ${product.name} no está activo`, 400);
       }
 
-      if (product.stock < item.quantity) {
+      const isVariableProduct = product.priceType === 'VARIABLE';
+      if (!isVariableProduct && product.stock < item.quantity) {
         throw new AppError(`Stock insuficiente para ${product.name}. Disponible: ${product.stock}, solicitado: ${item.quantity}`, 400);
+      }
+
+      const salePrice = isVariableProduct
+        ? Number(item.priceSnapshot)
+        : Number(product.price);
+      if (isVariableProduct && (!Number.isFinite(salePrice) || salePrice <= 0)) {
+        throw new AppError(`El producto variable ${product.name} requiere un importe mayor que cero`, 400, 'VARIABLE_PRICE_REQUIRED');
       }
 
       // Preparar item para la venta
@@ -157,19 +241,19 @@ const createSale = async (saleData, clinicId) => {
         itemType: 'product',
         itemId: item.itemId,
         nameSnapshot: product.name,
-        priceSnapshot: product.price,
-        quantity: item.quantity,
-        subtotal: product.price * item.quantity
+        ...calculateFiscalAmounts({ unitPrice: salePrice, quantity: item.quantity, ivaIncluded: product.ivaIncluded !== false }),
       });
 
       // Preparar movimiento de stock
-      stockMovements.push({
-        productId: item.itemId,
-        type: 'out',
-        quantity: -item.quantity, // negativo para salida
-        reason: 'Venta',
-        notes: `Venta a cliente ${client.name}`
-      });
+      if (!isVariableProduct) {
+        stockMovements.push({
+          productId: item.itemId,
+          type: 'out',
+          quantity: -item.quantity,
+          reason: 'Venta',
+          notes: `Venta a cliente ${client.name}`
+        });
+      }
     } else if (item.itemType === 'service') {
       const service = serviceMap.get(item.itemId);
       if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
@@ -177,19 +261,15 @@ const createSale = async (saleData, clinicId) => {
         itemType: 'service',
         itemId: item.itemId,
         nameSnapshot: service.name,
-        priceSnapshot: service.price,
-        quantity: item.quantity,
-        subtotal: service.price * item.quantity
+        ...calculateFiscalAmounts({ unitPrice: service.price, quantity: item.quantity, ivaIncluded: false }),
       });
     }
   }
 
   // Calcular totales
-  const subtotal = processedItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountAmount = (subtotal * discount) / 100; // descuento en porcentaje
-  const taxableAmount = subtotal - discountAmount;
-  const tax = taxableAmount * TAX_RATE;
-  const total = taxableAmount + tax;
+  const finalItems = installmentItems.length ? installmentItems : processedItems;
+  const totals = calculateSaleTotals(finalItems, discount);
+  const { subtotal, discount: discountAmount, tax, total } = totals;
 
   if (cashShiftId == null && Array.isArray(saleData.payments)) {
     throw new AppError('El turno de caja es obligatorio para registrar pagos', 400, 'CASH_SHIFT_REQUIRED');
@@ -208,6 +288,7 @@ const createSale = async (saleData, clinicId) => {
     paymentMethod: payments[0].method,
     status: SALE_STATUS.CONFIRMED
   };
+  if (installmentIds.length) salePayload.subscriptionInstallmentIds = installmentIds;
 
   if (cashShiftId != null) {
     salePayload.cashShiftId = Number(cashShiftId);
@@ -218,7 +299,7 @@ const createSale = async (saleData, clinicId) => {
   // Crear venta con movimientos de stock en transacción atómica
   const sale = await repository.createWithStockMovements(
     salePayload,
-    processedItems,
+    finalItems,
     stockMovements,
     clinicId
   );
@@ -226,8 +307,22 @@ const createSale = async (saleData, clinicId) => {
   return { ...sale, status: normalizeSaleStatus(sale.status) };
 };
 
-const getAll = async (clinicId) => {
-  const sales = await repository.findAll(clinicId);
+const getAll = async (clinicId, cashShiftId, userId) => {
+  // La lista operativa de ventas debe quedar acotada al turno abierto actual.
+  // Sin un turno solicitado no devolvemos el historial completo por accidente.
+  if (cashShiftId === undefined || cashShiftId === null || cashShiftId === '') return [];
+
+  const shiftId = Number(cashShiftId);
+  if (!Number.isInteger(shiftId) || shiftId <= 0) {
+    throw new AppError('El turno de caja no es válido', 400, 'INVALID_CASH_SHIFT');
+  }
+
+  const shift = await cashRegisterRepository.findShiftById(shiftId, clinicId, userId);
+  if (!shift || shift.status !== 'OPEN' || !shift.cashRegister?.isActive) {
+    throw new AppError('No existe un turno abierto en una caja activa', 403, 'ACTIVE_CASH_SHIFT_REQUIRED');
+  }
+
+  const sales = await repository.findAll(clinicId, shiftId);
   return (sales || []).map((sale) => ({ ...sale, status: normalizeSaleStatus(sale.status) }));
 };
 
@@ -289,6 +384,7 @@ const cancelSaleLegacy = async (id, clinicId) => {
         await tx.stockMovement.create({
           data: {
             productId: item.itemId,
+            clinicId,
             type: 'adjustment',
             quantity: item.quantity,
             reason: 'Cancelación de venta',
@@ -317,11 +413,17 @@ const buildPrintData = (sale, print) => ({
     quantity: item.quantity,
     price: item.priceSnapshot,
     subtotal: item.subtotal,
+    unitPrice: item.unitPrice ?? item.priceSnapshot,
+    ivaIncluded: item.ivaIncluded,
+    ivaRate: item.ivaRate,
+    netAmount: item.netAmount,
+    taxAmount: item.taxAmount,
   })),
   subtotal: sale.subtotal,
   discount: sale.discount,
   tax: sale.tax,
   total: sale.total,
+  taxRate: sale.saleItems.some((item) => Number(item.ivaRate) > 0) ? Math.max(...sale.saleItems.map((item) => Number(item.ivaRate))) : 0,
   payments: sale.payments.filter((payment) => Number(payment.amount) > 0).map((payment) => ({
     method: payment.method,
     amount: Number(payment.amount),
@@ -357,21 +459,22 @@ const prepareWaitingItems = async (items, clinicId) => {
       const product = productMap.get(item.itemId);
       if (!product) throw new AppError(`Producto ${item.itemId} no encontrado`, 404);
       if (!product.isActive) throw new AppError(`Producto ${product.name} no está activo`, 400);
-      if (product.stock < quantity) throw new AppError(`Stock insuficiente para ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+      const isVariableProduct = product.priceType === 'VARIABLE';
+      if (!isVariableProduct && product.stock < quantity) throw new AppError(`Stock insuficiente para ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+      const price = isVariableProduct ? Number(item.priceSnapshot) : Number(product.price);
+      if (isVariableProduct && (!Number.isFinite(price) || price <= 0)) throw new AppError(`El producto variable ${product.name} requiere un importe mayor que cero`, 400, 'VARIABLE_PRICE_REQUIRED');
       return {
         itemType: 'product',
         itemId: item.itemId,
         nameSnapshot: product.name,
-        priceSnapshot: product.price,
-        quantity,
-        subtotal: product.price * quantity,
+        ...calculateFiscalAmounts({ unitPrice: price, quantity, ivaIncluded: product.ivaIncluded !== false }),
       };
     }
 
     if (item.itemType === 'service') {
       const service = serviceMap.get(item.itemId);
       if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
-      return { itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, priceSnapshot: service.price, quantity, subtotal: service.price * quantity };
+      return { itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, ...calculateFiscalAmounts({ unitPrice: service.price, quantity, ivaIncluded: false }) };
     }
 
     throw new AppError('Tipo de item inválido', 400, 'INVALID_SALE_ITEM');
@@ -391,12 +494,7 @@ const createWaitingSale = async (saleData, clinicId, userId) => {
   }
 
   const items = await prepareWaitingItems(saleData.items, clinicId);
-  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountRate = Number(saleData.discount ?? 0);
-  if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
-  const discount = subtotal * discountRate / 100;
-  const tax = (subtotal - discount) * TAX_RATE;
-  const total = subtotal - discount + tax;
+  const { subtotal, discount, tax, total } = calculateSaleTotals(items, saleData.discount);
 
   const waitingPayload = { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null };
   const sale = saleData.draftId
@@ -466,13 +564,16 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
       const product = productMap.get(item.itemId);
       if (!product) throw new AppError(`Producto ${item.itemId} no encontrado`, 404);
       if (!product.isActive) throw new AppError(`Producto ${product.name} no está activo`, 400);
-      if (product.stock < quantity) throw new AppError(`Stock insuficiente para ${product.name}`, 400, 'INSUFFICIENT_STOCK');
-      processedItems.push({ itemType: 'product', itemId: item.itemId, nameSnapshot: product.name, priceSnapshot: product.price, quantity, subtotal: product.price * quantity });
-      stockMovements.push({ productId: item.itemId, type: 'out', quantity: -quantity, reason: 'Modificación de venta', notes: `Venta modificada por ${clientName}` });
+      const isVariableProduct = product.priceType === 'VARIABLE';
+      if (!isVariableProduct && product.stock < quantity) throw new AppError(`Stock insuficiente para ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+      const price = isVariableProduct ? Number(item.priceSnapshot) : Number(product.price);
+      if (isVariableProduct && (!Number.isFinite(price) || price <= 0)) throw new AppError(`El producto variable ${product.name} requiere un importe mayor que cero`, 400, 'VARIABLE_PRICE_REQUIRED');
+      processedItems.push({ itemType: 'product', itemId: item.itemId, nameSnapshot: product.name, ...calculateFiscalAmounts({ unitPrice: price, quantity, ivaIncluded: product.ivaIncluded !== false }) });
+      if (!isVariableProduct) stockMovements.push({ productId: item.itemId, type: 'out', quantity: -quantity, reason: 'Modificación de venta', notes: `Venta modificada por ${clientName}` });
     } else if (item.itemType === 'service') {
       const service = serviceMap.get(item.itemId);
       if (!service || !service.isActive) throw new AppError(`Servicio ${item.itemId} no encontrado o inactivo`, 404);
-      processedItems.push({ itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, priceSnapshot: service.price, quantity, subtotal: service.price * quantity });
+      processedItems.push({ itemType: 'service', itemId: item.itemId, nameSnapshot: service.name, ...calculateFiscalAmounts({ unitPrice: service.price, quantity, ivaIncluded: false }) });
     } else {
       throw new AppError('Tipo de item inválido', 400, 'INVALID_SALE_ITEM');
     }
@@ -512,12 +613,7 @@ const updateSale = async (id, saleData, clinicId, userId) => {
   }
 
   const { processedItems, stockMovements } = await prepareModifiedItems(saleData.items, clinicId, sale.client.name);
-  const subtotal = processedItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountRate = Number(saleData.discount ?? 0);
-  if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) throw new AppError('El descuento debe estar entre 0 y 100', 400, 'INVALID_DISCOUNT');
-  const discount = subtotal * discountRate / 100;
-  const tax = (subtotal - discount) * TAX_RATE;
-  const total = subtotal - discount + tax;
+  const { subtotal, discount, tax, total } = calculateSaleTotals(processedItems, saleData.discount);
   const payments = normalizePayments({ ...saleData, cashShiftId: effectiveCashShiftId }, total);
 
   return repository.updateSaleAtomic({
@@ -537,6 +633,12 @@ const cancelSalePhase4 = async (id, clinicId, userId, reason) => {
     throw new AppError('Venta no encontrada', 404);
   }
   return repository.cancelSaleAtomic({ id, clinicId, userId, reason });
+};
+
+const returnSale = async (id, items, clinicId, userId) => {
+  if (!Array.isArray(items) || items.length === 0) throw new AppError('La devolución debe incluir al menos un producto', 400, 'RETURN_ITEMS_REQUIRED');
+  if (typeof repository.returnSaleStockAtomic !== 'function') throw new AppError('El flujo de devoluciones no está disponible', 500);
+  return repository.returnSaleStockAtomic({ id, items, clinicId, userId });
 };
 
 const correctSale = async (id, saleData, clinicId, userId) => {
@@ -571,6 +673,7 @@ module.exports = {
   getSalesReport,
   updateSale,
   cancelSale: cancelSalePhase4,
+  returnSale,
   correctSale,
   printSale,
   getPrintHistory,

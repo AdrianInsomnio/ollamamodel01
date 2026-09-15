@@ -21,7 +21,7 @@ const create = async (req, res, next) => {
 
 const getAll = async (req, res, next) => {
   try {
-    const items = await service.getAll(req.user.clinicId);
+    const items = await service.getAll(req.user.clinicId, req.query.cashShiftId, req.user.id);
     res.json({ sales: items });
   } catch (error) {
     next(error);
@@ -100,6 +100,15 @@ const cancel = async (req, res, next) => {
   }
 };
 
+const returnSale = async (req, res, next) => {
+  try {
+    const result = await service.returnSale(saleIdFromRequest(req), req.body?.items, req.user.clinicId, req.user.id);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const correct = async (req, res, next) => {
   try {
     const result = await service.correctSale(saleIdFromRequest(req), req.body, req.user.clinicId, req.user.id);
@@ -127,4 +136,4 @@ const printHistory = async (req, res, next) => {
   }
 };
 
-module.exports = { create, draft, getDrafts, waiting, getWaiting, resume, getAll, getById, update, cancel, correct, print, printHistory };
+module.exports = { create, draft, getDrafts, waiting, getWaiting, resume, getAll, getById, update, cancel, returnSale, correct, print, printHistory };

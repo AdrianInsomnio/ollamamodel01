@@ -2,7 +2,7 @@ const service = require('./product.service');
 
 const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body, req.user.clinicId);
+    const item = await service.create(req.body, req.user.clinicId, req.user.role);
     res.status(201).json(item);
   } catch (error) {
     next(error);

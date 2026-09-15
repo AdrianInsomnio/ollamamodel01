@@ -71,6 +71,13 @@ router.delete(
 );
 
 router.post(
+  '/:id/return',
+  authorize(ROLES.ADMIN),
+  idempotency('POST /api/sales/:id/return'),
+  controller.returnSale,
+);
+
+router.post(
   '/:id/correct',
   authorize(ROLES.ADMIN, ROLES.USER),
   idempotency('POST /api/sales/:id/correct'),

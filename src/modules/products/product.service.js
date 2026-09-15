@@ -1,34 +1,68 @@
 const repository = require('./product.repository');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, clinicId) => {
+const create = async (data, clinicId, role = 'ADMIN') => {
   // Validar datos requeridos
   if (!data.name || data.price === undefined || data.price === null) {
     throw new AppError('Nombre y precio son requeridos', 400);
   }
 
-  if (data.price <= 0) {
+  const priceType = data.priceType ?? (Number(data.price) === 0 ? 'VARIABLE' : 'FIXED');
+  if (data.ivaIncluded !== undefined && typeof data.ivaIncluded !== 'boolean') {
+    throw new AppError('La configuración de IVA debe ser booleana', 400, 'INVALID_IVA_INCLUDED');
+  }
+  if (!['FIXED', 'VARIABLE'].includes(priceType)) {
+    throw new AppError('El tipo de precio no es válido', 400, 'INVALID_PRICE_TYPE');
+  }
+  const isVariableProduct = priceType === 'VARIABLE';
+  if (isVariableProduct && Number(data.price) !== 0) {
+    throw new AppError('Los productos variables deben tener precio base 0', 400, 'VARIABLE_PRICE_MUST_BE_ZERO');
+  }
+  if (!isVariableProduct && Number(data.price) <= 0) {
+    throw new AppError('El precio debe ser mayor a 0', 400);
+  }
+  if (role === 'USER' && !isVariableProduct) {
+    throw new AppError('USER solo puede crear productos variables con precio 0', 403, 'VARIABLE_PRODUCT_ONLY');
+  }
+
+  if (data.price < 0) {
     throw new AppError('El precio debe ser mayor a 0', 400);
   }
 
-  if (data.cost !== undefined && data.cost !== null && data.cost < 0) {
+  const normalizedData = role === 'USER'
+    ? { ...data, price: 0, priceType: 'VARIABLE', cost: null, stock: 0 }
+    : (data.priceType || isVariableProduct ? { ...data, priceType } : data);
+
+  if (normalizedData.cost !== undefined && normalizedData.cost !== null && normalizedData.cost < 0) {
     throw new AppError('El costo no puede ser negativo', 400);
   }
 
-  if (data.stock < 0) {
+  if (normalizedData.stock < 0) {
     throw new AppError('El stock no puede ser negativo', 400);
   }
 
-  if (data.minStock < 0) {
+  if (normalizedData.minStock < 0) {
     throw new AppError('El stock mínimo no puede ser negativo', 400);
   }
 
-  if (data.categoryId !== undefined && data.categoryId !== null) {
-    const category = await repository.findCategory(data.categoryId, clinicId);
+  if (normalizedData.categoryId !== undefined && normalizedData.categoryId !== null) {
+    const category = await repository.findCategory(normalizedData.categoryId, clinicId);
     if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
   }
 
-  return await repository.create(data, clinicId);
+  if (normalizedData.subcategoryId !== undefined && normalizedData.subcategoryId !== null) {
+    if (normalizedData.categoryId === undefined || normalizedData.categoryId === null) {
+      throw new AppError('La subcategoría requiere una categoría activa', 400, 'SUBCATEGORY_CATEGORY_REQUIRED');
+    }
+    const subcategory = await repository.findSubcategory(normalizedData.subcategoryId, normalizedData.categoryId, clinicId);
+    if (!subcategory) throw new AppError('Subcategoría no encontrada para la categoría activa', 400, 'SUBCATEGORY_NOT_FOUND');
+  }
+
+  if (normalizedData.maxStock !== undefined && normalizedData.maxStock !== null && normalizedData.maxStock < normalizedData.minStock) {
+    throw new AppError('El stock máximo no puede ser menor al stock mínimo', 400, 'INVALID_MAX_STOCK');
+  }
+
+  return await repository.create(normalizedData, clinicId);
 };
 
 const getAll = async (clinicId) => {
@@ -46,13 +80,27 @@ const getById = async (id, clinicId) => {
 const update = async (id, clinicId, data) => {
   const product = await getById(id, clinicId);
 
+  if (data.ivaIncluded !== undefined && typeof data.ivaIncluded !== 'boolean') {
+    throw new AppError('La configuración de IVA debe ser booleana', 400, 'INVALID_IVA_INCLUDED');
+  }
+
   if (data.categoryId !== undefined && data.categoryId !== null) {
     const category = await repository.findCategory(data.categoryId, clinicId);
     if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
   }
 
+  if (data.subcategoryId !== undefined && data.subcategoryId !== null) {
+    const categoryId = data.categoryId ?? product.categoryId;
+    if (categoryId === undefined || categoryId === null) throw new AppError('La subcategoría requiere una categoría activa', 400, 'SUBCATEGORY_CATEGORY_REQUIRED');
+    const subcategory = await repository.findSubcategory(data.subcategoryId, categoryId, clinicId);
+    if (!subcategory) throw new AppError('Subcategoría no encontrada para la categoría activa', 400, 'SUBCATEGORY_NOT_FOUND');
+  }
+
   // Validaciones
-  if (data.price !== undefined && data.price <= 0) {
+  const nextPriceType = data.priceType ?? product.priceType ?? (Number(data.price ?? product.price) === 0 ? 'VARIABLE' : 'FIXED');
+  if (!['FIXED', 'VARIABLE'].includes(nextPriceType)) throw new AppError('El tipo de precio no es válido', 400, 'INVALID_PRICE_TYPE');
+  if (nextPriceType === 'VARIABLE' && data.price !== undefined && Number(data.price) !== 0) throw new AppError('Los productos variables deben tener precio base 0', 400, 'VARIABLE_PRICE_MUST_BE_ZERO');
+  if (nextPriceType === 'FIXED' && data.price !== undefined && data.price <= 0) {
     throw new AppError('El precio debe ser mayor a 0', 400);
   }
 
@@ -68,10 +116,15 @@ const update = async (id, clinicId, data) => {
     throw new AppError('El stock mínimo no puede ser negativo', 400);
   }
 
+  if (data.maxStock !== undefined && data.maxStock !== null && data.maxStock < (data.minStock ?? product.minStock)) {
+    throw new AppError('El stock máximo no puede ser menor al stock mínimo', 400, 'INVALID_MAX_STOCK');
+  }
+
   // Si se cambia el precio, registrar movimiento si hay stock
   if (data.price !== undefined && data.price !== product.price && product.stock > 0) {
     await repository.createStockMovement({
       productId: id,
+      clinicId,
       type: 'adjustment',
       quantity: 0, // movimiento de precio, no de stock
       reason: 'Cambio de precio',
@@ -94,26 +147,30 @@ const remove = async (id, clinicId) => {
 };
 
 const adjustStock = async (id, quantity, reason, clinicId, notes = '') => {
-  const product = await getById(id, clinicId);
-
-  const newStock = product.stock + quantity;
-
-  if (newStock < 0) {
-    throw new AppError('El ajuste resultaría en stock negativo', 400);
+  if (!Number.isInteger(quantity) || quantity === 0) {
+    throw new AppError('La cantidad debe ser un entero distinto de cero', 400, 'INVALID_STOCK_QUANTITY');
   }
 
-  // Actualizar stock
-  await repository.updateStock(id, quantity, clinicId);
+  if (!reason || !reason.trim()) {
+    throw new AppError('El motivo del ajuste es obligatorio', 400, 'STOCK_REASON_REQUIRED');
+  }
 
-  // Registrar movimiento
+  const atomicResult = await repository.adjustStockAtomic({ id, quantity, reason: reason.trim(), clinicId, notes });
+  if (atomicResult !== undefined) return atomicResult;
+
+  // Compatibilidad con repositorios antiguos durante la transición.
+  const product = await getById(id, clinicId);
+  const newStock = product.stock + quantity;
+  if (newStock < 0) throw new AppError('El ajuste resultaría en stock negativo', 400);
+  await repository.updateStock(id, quantity, clinicId);
   await repository.createStockMovement({
     productId: id,
+    clinicId,
     type: quantity > 0 ? 'in' : 'out',
     quantity,
-    reason,
-    notes
+    reason: reason.trim(),
+    notes,
   });
-
   return { message: 'Stock ajustado exitosamente', newStock };
 };
 

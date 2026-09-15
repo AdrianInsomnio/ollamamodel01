@@ -45,6 +45,7 @@ describe('Sale Service', () => {
       id: faker.number.int(),
       name: faker.commerce.productName(),
       price: faker.number.float({ min: 10, max: 1000 }),
+      ivaIncluded: false,
       stock: faker.number.int({ min: 10, max: 100 }),
       isActive: true,
       organizationId
@@ -72,8 +73,8 @@ describe('Sale Service', () => {
         id: faker.number.int(),
         ...mockSaleData,
         subtotal: mockProduct.price * mockSaleData.items[0].quantity,
-        tax: (mockProduct.price * mockSaleData.items[0].quantity) * 0.14,
-        total: (mockProduct.price * mockSaleData.items[0].quantity) * 1.14,
+        tax: (mockProduct.price * mockSaleData.items[0].quantity) * 0.22,
+        total: (mockProduct.price * mockSaleData.items[0].quantity) * 1.22,
         items: []
       });
 
@@ -113,13 +114,56 @@ describe('Sale Service', () => {
         .toThrow(/Stock insuficiente/);
     });
 
+    it('debería vender un producto variable sin controlar stock y conservar el importe ingresado', async () => {
+      const variableProduct = { ...mockProduct, price: 0, priceType: 'VARIABLE', stock: 0 };
+      const saleData = {
+        ...mockSaleData,
+        items: [{ ...mockSaleData.items[0], itemId: variableProduct.id, quantity: 2, priceSnapshot: 275 }]
+      };
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([variableProduct]);
+      mockSaleRepository.createWithStockMovements.mockResolvedValue({ id: 1 });
+
+      await saleService.createSale(saleData, organizationId);
+
+      expect(mockSaleRepository.createWithStockMovements).toHaveBeenCalledWith(
+        expect.objectContaining({ subtotal: 550, total: 671 }),
+        [expect.objectContaining({
+          itemType: 'product',
+          itemId: variableProduct.id,
+          nameSnapshot: variableProduct.name,
+          priceSnapshot: 275,
+          quantity: 2,
+          subtotal: 550,
+          unitPrice: 275,
+          ivaIncluded: false,
+          ivaRate: 22,
+          netAmount: 550,
+          taxAmount: 121,
+        })],
+        [],
+        organizationId,
+      );
+    });
+
+    it('debería rechazar un producto variable sin importe válido', async () => {
+      const variableProduct = { ...mockProduct, price: 0, priceType: 'VARIABLE', stock: 0 };
+      mockClientRepository.findById.mockResolvedValue(mockClient);
+      mockProductRepository.findByIds.mockResolvedValue([variableProduct]);
+
+      await expect(saleService.createSale({
+        ...mockSaleData,
+        items: [{ ...mockSaleData.items[0], priceSnapshot: 0 }],
+      }, organizationId)).rejects.toThrow('requiere un importe mayor que cero');
+    });
+
     it('debería calcular correctamente los totales con IVA', async () => {
       // Arrange
       const quantity = 2;
       const unitPrice = 100;
       const expectedSubtotal = unitPrice * quantity; // 200
-      const expectedTax = expectedSubtotal * 0.14; // 28
-      const expectedTotal = expectedSubtotal + expectedTax; // 228
+      const expectedTax = expectedSubtotal * 0.22; // 44
+      const expectedTotal = expectedSubtotal + expectedTax; // 244
 
       const productWithPrice = { ...mockProduct, price: unitPrice };
       const saleData = {
@@ -159,11 +203,10 @@ describe('Sale Service', () => {
       const discount = 10; // 10%
       const productPrice = 100; // Precio fijo para el test
       const quantity = 2; // Cantidad fija
-      const subtotal = productPrice * quantity; // 200
-      const discountAmount = subtotal * (discount / 100); // 20
-      const taxableAmount = subtotal - discountAmount; // 180
-      const tax = taxableAmount * 0.14; // 25.2
-      const total = taxableAmount + tax; // 205.2
+      const subtotal = 163.93; // Neto de $200 finales con IVA incluido
+      const discountAmount = 16.39; // 10% sobre el neto
+      const tax = 32.46; // IVA luego del descuento
+      const total = 180; // Total final con descuento
 
       // Crear datos específicos para este test
       const testProduct = {
@@ -217,6 +260,27 @@ describe('Sale Service', () => {
     });
   });
 
+  describe('returns', () => {
+    it('debería rechazar una devolución sin productos', async () => {
+      await expect(saleService.returnSale(10, [], organizationId, 7))
+        .rejects.toThrow('La devolución debe incluir al menos un producto');
+    });
+
+    it('debería enviar la devolución al repositorio con el contexto autenticado', async () => {
+      const items = [{ productId: 4, quantity: 2 }];
+      mockSaleRepository.returnSaleStockAtomic.mockResolvedValue({ saleId: 10, returned: items });
+
+      await expect(saleService.returnSale(10, items, organizationId, 7))
+        .resolves.toEqual({ saleId: 10, returned: items });
+      expect(mockSaleRepository.returnSaleStockAtomic).toHaveBeenCalledWith({
+        id: 10,
+        items,
+        clinicId: organizationId,
+        userId: 7,
+      });
+    });
+  });
+
   describe('payments and cash shift', () => {
     it('should prepare mixed payments linked to the cash shift', async () => {
       const productWithPrice = { ...mockProduct, price: 100 };
@@ -226,8 +290,8 @@ describe('Sale Service', () => {
         userId: 7,
         items: [{ ...mockSaleData.items[0], itemId: productWithPrice.id, quantity: 1 }],
         payments: [
-          { method: 'cash', amount: 57 },
-          { method: 'DEBIT_CARD', amount: 57 },
+          { method: 'cash', amount: 61 },
+          { method: 'DEBIT_CARD', amount: 61 },
         ],
       };
 
@@ -243,8 +307,8 @@ describe('Sale Service', () => {
           userId: 7,
           paymentMethod: 'CASH',
           payments: [
-            expect.objectContaining({ method: 'CASH', amount: 57 }),
-            expect.objectContaining({ method: 'DEBIT_CARD', amount: 57 }),
+            expect.objectContaining({ method: 'CASH', amount: 61 }),
+            expect.objectContaining({ method: 'DEBIT_CARD', amount: 61 }),
           ],
         }),
         expect.any(Array),
@@ -412,7 +476,7 @@ describe('Sale Service', () => {
         items: [{ itemType: 'product', itemId: productWithPrice.id, quantity: 1 }],
         paymentMethod: 'cash',
         cashShiftId: 8,
-        payments: [{ method: 'cash', amount: 114 }],
+        payments: [{ method: 'cash', amount: 122 }],
         discount: 0,
       }, organizationId, 7);
 
@@ -452,15 +516,15 @@ describe('Sale Service', () => {
 
       await saleService.updateSale(saleId, {
         items: [{ itemType: 'product', itemId: productWithPrice.id, quantity: 1 }],
-        payments: [{ method: 'cash', amount: 114 }],
+        payments: [{ method: 'cash', amount: 122 }],
         discount: 0,
       }, organizationId, 7);
 
       expect(mockSaleRepository.updateSaleAtomic).toHaveBeenCalledWith(expect.objectContaining({
         id: saleId,
         userId: 7,
-        payments: [expect.objectContaining({ method: 'CASH', amount: 114 })],
-        saleData: expect.objectContaining({ total: 114 }),
+        payments: [expect.objectContaining({ method: 'CASH', amount: 122 })],
+        saleData: expect.objectContaining({ total: 122 }),
       }));
     });
   });

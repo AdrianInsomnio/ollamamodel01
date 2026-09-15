@@ -19,4 +19,22 @@ const update = (id, clinicId, data) => prisma.productCategory.update({
   include: { _count: { select: { products: true } } },
 });
 
-module.exports = { findAll, findById, create, update };
+const findSubcategories = (categoryId, clinicId) => prisma.productSubcategory.findMany({
+  where: { categoryId, clinicId },
+  orderBy: { name: 'asc' },
+});
+
+const findSubcategory = (id, categoryId, clinicId) => prisma.productSubcategory.findFirst({
+  where: { id, categoryId, clinicId },
+});
+
+const createSubcategory = (data, categoryId, clinicId) => prisma.productSubcategory.create({
+  data: { ...data, categoryId, clinicId },
+});
+
+const updateSubcategory = (id, categoryId, clinicId, data) => prisma.productSubcategory.update({
+  where: { id },
+  data,
+});
+
+module.exports = { findAll, findById, create, update, findSubcategories, findSubcategory, createSubcategory, updateSubcategory };

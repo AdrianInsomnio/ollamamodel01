@@ -82,6 +82,36 @@ describe('POS waiting sales and cash closing invariants', () => {
       .rejects.toMatchObject({ statusCode: 403, code: 'CASH_SHIFT_ACCESS_DENIED' });
   });
 
+  it('resumes a waiting sale using its existing cash shift and register', async () => {
+    const waitingSale = {
+      id: 44,
+      clinicId: 10,
+      status: 'WAITING',
+      cashShiftId: 8,
+      cashShift: { status: 'OPEN', userId: 7, cashRegisterId: 3 },
+    };
+    const tx = {
+      $queryRaw: jest.fn(),
+      sale: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(waitingSale)
+          .mockResolvedValueOnce({ ...waitingSale, status: 'DRAFT' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      cashAuditEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    prisma.$transaction.mockImplementation((callback) => callback(tx));
+
+    await saleRepository.resumeWaitingSaleAtomic({ id: 44, clinicId: 10, userId: 7 });
+
+    expect(tx.sale.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { status: 'DRAFT', userId: 7 },
+    }));
+    expect(tx.cashAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ cashRegisterId: 3, cashShiftId: 8 }),
+    }));
+  });
+
   it('blocks closing a shift with WAITING sales', async () => {
     const tx = {
       $queryRaw: jest.fn(),

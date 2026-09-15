@@ -81,6 +81,56 @@ describe('Product Service', () => {
     });
   });
 
+  it('permite a USER crear un producto variable con precio base cero', async () => {
+    const productData = { name: mockProduct.name, price: 0, cost: 125, stock: 8 };
+    productRepository.create.mockResolvedValue(mockProduct);
+
+    await productService.create(productData, organizationId, 'USER');
+
+    expect(productRepository.create).toHaveBeenCalledWith({
+      ...productData,
+      price: 0,
+      priceType: 'VARIABLE',
+      cost: null,
+      stock: 0,
+    }, organizationId);
+  });
+
+  it('rechaza a USER cuando intenta crear un producto de precio fijo', async () => {
+    await expect(productService.create({ name: mockProduct.name, price: 100 }, organizationId, 'USER'))
+      .rejects
+      .toMatchObject({ statusCode: 403, code: 'VARIABLE_PRODUCT_ONLY' });
+  });
+
+  it('rechaza una subcategoría que no pertenece a la categoría y clínica activas', async () => {
+    productRepository.findCategory.mockResolvedValue({ id: 10 });
+    productRepository.findSubcategory.mockResolvedValue(null);
+
+    await expect(productService.create({
+      name: mockProduct.name,
+      price: 100,
+      categoryId: 10,
+      subcategoryId: 99,
+    }, organizationId)).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(productRepository.findSubcategory).toHaveBeenCalledWith(99, 10, organizationId);
+    expect(productRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un stock máximo menor al stock mínimo', async () => {
+    await expect(productService.create({
+      name: mockProduct.name,
+      price: 100,
+      minStock: 10,
+      maxStock: 5,
+    }, organizationId)).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'INVALID_MAX_STOCK',
+    });
+
+    expect(productRepository.create).not.toHaveBeenCalled();
+  });
+
   describe('getById', () => {
     it('debería retornar un producto por ID', async () => {
       // Arrange
@@ -135,6 +185,7 @@ describe('Product Service', () => {
       // Assert
       expect(productRepository.createStockMovement).toHaveBeenCalledWith({
         productId: mockProduct.id,
+        clinicId: organizationId,
         type: 'adjustment',
         quantity: 0,
         reason: 'Cambio de precio',
@@ -171,6 +222,7 @@ describe('Product Service', () => {
       expect(productRepository.updateStock).toHaveBeenCalledWith(mockProduct.id, quantity, organizationId);
       expect(productRepository.createStockMovement).toHaveBeenCalledWith({
         productId: mockProduct.id,
+        clinicId: organizationId,
         type: 'in',
         quantity,
         reason,
@@ -195,6 +247,7 @@ describe('Product Service', () => {
       // Assert
       expect(productRepository.createStockMovement).toHaveBeenCalledWith({
         productId: mockProduct.id,
+        clinicId: organizationId,
         type: 'out',
         quantity,
         reason,

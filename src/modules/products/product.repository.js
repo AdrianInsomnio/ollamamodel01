@@ -1,4 +1,5 @@
 const { prisma } = require('../../lib/prisma');
+const { AppError } = require('../../core/errors/AppError');
 
 const create = async (data, clinicId) => {
   return await prisma.product.create({
@@ -7,7 +8,8 @@ const create = async (data, clinicId) => {
       clinicId
     },
     include: {
-      category: true
+      category: true,
+      subcategory: true,
     }
   });
 };
@@ -28,7 +30,8 @@ const findAll = async (clinicId, options = {}) => {
   return await prisma.product.findMany({
     where,
     include: {
-      category: true
+      category: true,
+      subcategory: true,
     },
     orderBy: { name: 'asc' }
   });
@@ -61,12 +64,18 @@ const findCategory = async (categoryId, clinicId) => prisma.productCategory.find
   select: { id: true },
 });
 
+const findSubcategory = async (subcategoryId, categoryId, clinicId) => prisma.productSubcategory.findFirst({
+  where: { id: Number(subcategoryId), categoryId: Number(categoryId), clinicId, isActive: true, category: { isActive: true } },
+  select: { id: true },
+});
+
 const update = async (id, clinicId, data) => {
   return await prisma.product.update({
     where: { id, clinicId },
     data,
     include: {
-      category: true
+      category: true,
+      subcategory: true,
     }
   });
 };
@@ -85,6 +94,41 @@ const updateStock = async (id, quantityChange, clinicId) => {
         increment: quantityChange
       }
     }
+  });
+};
+
+const adjustStockAtomic = async ({ id, quantity, reason, clinicId, notes = '' }) => {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.product.updateMany({
+      where: {
+        id,
+        clinicId,
+        ...(quantity < 0 ? { stock: { gte: Math.abs(quantity) } } : {}),
+      },
+      data: { stock: { increment: quantity } },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError('El producto no existe en la clÃ­nica o el stock disponible es insuficiente', 409, 'INSUFFICIENT_STOCK');
+    }
+
+    const product = await tx.product.findFirst({
+      where: { id, clinicId },
+      select: { stock: true },
+    });
+
+    await tx.stockMovement.create({
+      data: {
+        productId: id,
+        clinicId,
+        type: quantity > 0 ? 'in' : 'out',
+        quantity,
+        reason,
+        notes,
+      },
+    });
+
+    return { message: 'Stock ajustado exitosamente', newStock: product.stock };
   });
 };
 
@@ -135,9 +179,11 @@ module.exports = {
   findById,
   findByIds,
   findCategory,
+  findSubcategory,
   update,
   remove,
   updateStock,
+  adjustStockAtomic,
   getLowStockProducts,
   getStockMovements,
   createStockMovement,
