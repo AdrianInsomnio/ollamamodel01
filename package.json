@@ -15,7 +15,8 @@
         "test:unit": "jest __tests__/unit",
         "test:integration": "jest __tests__/integration",
         "test:services": "jest __tests__/unit/services",
-        "seed:test": "node scripts/seed-test-data.js"
+        "seed:test": "node scripts/seed-test-data.js",
+        "seed:test-products": "node scripts/seed-test-products.js"
     },
     "dependencies": {
         "bcryptjs": "3.0.2",
