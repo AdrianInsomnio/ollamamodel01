@@ -79,6 +79,16 @@ const getById = async (id, clinicId) => {
 
 const update = async (id, clinicId, data) => {
   const product = await getById(id, clinicId);
+  const editableFields = [
+    'name', 'description', 'sku', 'barcode', 'brand', 'supplier',
+    'categoryId', 'subcategoryId', 'priceType', 'price', 'ivaIncluded',
+    'cost', 'stock', 'minStock', 'maxStock', 'isActive', 'discontinuedAt',
+  ];
+  const updateData = Object.fromEntries(
+    editableFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
+      .map((field) => [field, data[field]])
+  );
 
   if (data.ivaIncluded !== undefined && typeof data.ivaIncluded !== 'boolean') {
     throw new AppError('La configuración de IVA debe ser booleana', 400, 'INVALID_IVA_INCLUDED');
@@ -132,7 +142,7 @@ const update = async (id, clinicId, data) => {
     });
   }
 
-  return await repository.update(id, clinicId, data);
+  return await repository.update(id, clinicId, updateData);
 };
 
 const remove = async (id, clinicId) => {

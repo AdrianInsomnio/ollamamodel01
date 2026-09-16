@@ -252,9 +252,47 @@ const createUser = async (data, actor) => {
   if (![ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(actor.role)) {
     throw new AppError("Access denied", 403, "FORBIDDEN");
   }
-  // TODO: For ADMIN, validate that clinicIds belong to their own clinic if needed
-  // Pass organizationId from actor to ensure correct org
-  return await repository.createUser({ ...data, organizationId: actor.organizationId });
+
+  const role = data.role || ROLES.USER;
+  if (![ROLES.ADMIN, ROLES.USER, ROLES.VET].includes(role) && actor.role !== ROLES.SUPER_ADMIN) {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
+  }
+
+  const requestedClinicIds = [...new Set((data.clinicIds || []).map(Number))];
+  if (actor.role === ROLES.ADMIN) {
+    if (actor.clinicId === undefined || actor.clinicId === null) {
+      throw new AppError("User has no clinic assigned", 403, "NO_CLINIC_ASSIGNED");
+    }
+    if (role === ROLES.SUPER_ADMIN) {
+      throw new AppError("Access denied", 403, "FORBIDDEN");
+    }
+    if (requestedClinicIds.some((clinicId) => clinicId !== Number(actor.clinicId))) {
+      throw new AppError("You can only assign users to your clinic", 403, "CLINIC_SCOPE_VIOLATION");
+    }
+    requestedClinicIds.splice(0, requestedClinicIds.length, Number(actor.clinicId));
+  }
+
+  if (requestedClinicIds.length === 0) {
+    throw new AppError("At least one clinic must be assigned", 400, "CLINIC_REQUIRED");
+  }
+
+  const clinics = await prisma.clinic.findMany({
+    where: {
+      id: { in: requestedClinicIds },
+      organizationId: Number(actor.organizationId),
+    },
+    select: { id: true },
+  });
+  if (clinics.length !== requestedClinicIds.length) {
+    throw new AppError("One or more clinics are outside the organization", 403, "CLINIC_SCOPE_VIOLATION");
+  }
+
+  return await repository.createUser({
+    ...data,
+    role,
+    clinicIds: requestedClinicIds,
+    organizationId: actor.organizationId,
+  });
 };
 
 const updateUser = async (id, data, actor) => {
@@ -306,13 +344,34 @@ const deleteUser = async (id, actor) => {
   return await repository.deleteUser(id);
 };
 
-const updateUserClinics = async (userId, clinicIds) => {
-  // Only SUPER_ADMIN can update clinics assignment
-  if (userId !== undefined && userId !== null) {
-    // In a real scenario, we would also validate that the actor has permission (SUPER_ADMIN)
-    // For simplicity, we rely on route protection.
-    return await repository.updateUserClinics(userId, clinicIds);
+const updateUserClinics = async (userId, clinicIds, actor) => {
+  if (actor.role !== ROLES.SUPER_ADMIN) {
+    throw new AppError("Access denied", 403, "FORBIDDEN");
   }
+
+  const targetUser = await prisma.user.findFirst({
+    where: { id: Number(userId), organizationId: Number(actor.organizationId) },
+    select: { id: true },
+  });
+  if (!targetUser) throw new AppError("User not found", 404);
+
+  const uniqueClinicIds = [...new Set((clinicIds || []).map(Number))];
+  if (uniqueClinicIds.length === 0) {
+    throw new AppError("At least one clinic must be assigned", 400, "CLINIC_REQUIRED");
+  }
+
+  const clinics = await prisma.clinic.findMany({
+    where: {
+      id: { in: uniqueClinicIds },
+      organizationId: Number(actor.organizationId),
+    },
+    select: { id: true },
+  });
+  if (clinics.length !== uniqueClinicIds.length) {
+    throw new AppError("One or more clinics are outside the organization", 403, "CLINIC_SCOPE_VIOLATION");
+  }
+
+  return await repository.updateUserClinics(userId, uniqueClinicIds);
 };
 
 module.exports = {

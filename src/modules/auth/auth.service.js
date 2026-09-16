@@ -69,11 +69,15 @@ const register = async ({ username, email, password, role = ROLES.USER, clinicId
     }
     organizationId = organizationIds[0];
 
+    if (actor && actor.organizationId !== undefined && actor.organizationId !== null
+      && organizationId !== Number(actor.organizationId)) {
+      throw new AppError('Users can only be assigned within the actor organization', 403, 'ORGANIZATION_SCOPE_VIOLATION');
+    }
+
     if (actor && actor.role === ROLES.ADMIN) {
       const actorClinicId = Number(actor.clinicId);
-      const actorClinic = clinics.find((clinic) => clinic.id === actorClinicId);
-      if (!actorClinic || actorClinic.organizationId !== organizationId) {
-        throw new AppError('ADMIN can only assign users within their organization', 403);
+      if (uniqueClinicIds.some((clinicId) => clinicId !== actorClinicId)) {
+        throw new AppError('ADMIN can only assign users to their clinic', 403, 'CLINIC_SCOPE_VIOLATION');
       }
     }
   } else if (isBootstrap) {
@@ -238,6 +242,11 @@ const login = async (email, password, ip, rememberMe = false) => {
   const isValidPassword = await comparePassword(password, user.password);
   if (!isValidPassword) {
     logger.warn({ event: 'LOGIN_FAILED_WRONG_PASSWORD', userId: user.id, email, ip, timestamp: new Date().toISOString() });
+    throw new AppError('Invalid credentials', 401);
+  }
+
+  if (user.isActive === false) {
+    logger.warn({ event: 'LOGIN_FAILED_INACTIVE_USER', userId: user.id, email, ip, timestamp: new Date().toISOString() });
     throw new AppError('Invalid credentials', 401);
   }
 

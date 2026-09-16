@@ -32,7 +32,9 @@ const decodeAndAttach = async (req, token) => {
       username: true,
       email: true,
       role: true,
+      isActive: true,
       organizationId: true,
+      passwordChangedAt: true,
       clinics: {
         select: { id: true },
         orderBy: { id: 'asc' },
@@ -42,6 +44,10 @@ const decodeAndAttach = async (req, token) => {
 
   if (!user) {
     throw new AppError('User not found', 401, 'UNAUTHORIZED');
+  }
+
+  if (user.isActive === false) {
+    throw new AppError('User is inactive', 401, 'UNAUTHORIZED');
   }
 
   // SUPER_ADMIN tiene scope a nivel organizacion y no requiere clinic asignada.

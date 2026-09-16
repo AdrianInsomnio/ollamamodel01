@@ -201,6 +201,7 @@ const updateUser = async (id, data) => {
   if (isActive !== undefined) updateData.isActive = isActive;
   if (password !== undefined && password !== "") {
     updateData.password = await hashPassword(password);
+    updateData.passwordChangedAt = new Date();
   }
 
   const user = await prisma.user.update({

@@ -162,21 +162,32 @@ const removePrescription = async (prescriptionId) => {
 const update = async (id, clinicId, data) => {
   const consultation = await getById(id, clinicId);
 
-  if (data.priority !== undefined && !validPriorities.includes(data.priority)) {
+  const editableFields = [
+    'weight', 'temperature', 'symptoms', 'notes', 'consultationFee',
+    'treatmentFee', 'totalFee', 'status', 'closedAt', 'consultorioId',
+    'startAt', 'endAt', 'priority',
+  ];
+  const updateData = Object.fromEntries(
+    editableFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
+      .map((field) => [field, data[field]])
+  );
+
+  if (updateData.priority !== undefined && !validPriorities.includes(updateData.priority)) {
     throw new AppError('Invalid consultation priority', 400);
   }
 
   // Validar datos médicos si se actualizan
-  validateMedicalData(data);
+  validateMedicalData(updateData);
 
   // Recalcular tarifa total si se actualiza
-  if (data.consultationFee !== undefined || data.treatmentFee !== undefined) {
-    const consultationFee = data.consultationFee !== undefined ? data.consultationFee : consultation.consultationFee;
-    const treatmentFee = data.treatmentFee !== undefined ? data.treatmentFee : consultation.treatmentFee;
-    data.totalFee = consultationFee + treatmentFee;
+  if (updateData.consultationFee !== undefined || updateData.treatmentFee !== undefined) {
+    const consultationFee = updateData.consultationFee !== undefined ? updateData.consultationFee : consultation.consultationFee;
+    const treatmentFee = updateData.treatmentFee !== undefined ? updateData.treatmentFee : consultation.treatmentFee;
+    updateData.totalFee = consultationFee + treatmentFee;
   }
 
-  return await repository.update(id, clinicId, data);
+  return await repository.update(id, clinicId, updateData);
 };
 
 const remove = async (id, clinicId) => {

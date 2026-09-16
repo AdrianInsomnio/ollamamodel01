@@ -100,6 +100,13 @@ class PetService {
     if (value.clinicId && clinicId && value.clinicId !== clinicId) {
       throw new AppError('Cannot move pet to a different clinic', 403);
     }
+
+    if (value.clientId !== undefined) {
+      const client = await clientRepository.findById(value.clientId, clinicId);
+      if (!client) {
+        throw new AppError('Client not found in the specified clinic', 404);
+      }
+    }
     return await petRepository.update(id, value);
   }
 

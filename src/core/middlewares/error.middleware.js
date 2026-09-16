@@ -16,7 +16,6 @@ const errorMiddleware = (err, req, res, next) => {
     return res.status(400).json({
       code: 'DUPLICATE_ENTRY',
       message: 'Duplicate entry',
-      details: { field: err.sqlMessage }
     });
   }
 
@@ -25,14 +24,12 @@ const errorMiddleware = (err, req, res, next) => {
     return res.status(400).json({
       code: 'DATABASE_ERROR',
       message: 'Database operation failed',
-      details: { originalError: err.message }
     });
   }
 
   res.status(500).json({
     code: 'INTERNAL_SERVER_ERROR',
     message: 'Something went wrong!',
-    details: process.env.NODE_ENV === 'development' ? { stack: err.stack } : undefined
   });
 };
 

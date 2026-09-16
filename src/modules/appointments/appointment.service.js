@@ -144,7 +144,27 @@ const update = async (id, clinicId, data) => {
       throw new AppError('Appointment date cannot be in the past', 400);
     }
   }
-  const item = await repository.update(appointmentId, clinicId, data);
+
+  if (data.clientId !== undefined || data.petId !== undefined) {
+    const current = await repository.findById(appointmentId, clinicId);
+    if (!current) throw new AppError('Appointment not found', 404);
+
+    const nextClientId = data.clientId === undefined ? current.clientId : Number(data.clientId);
+    const nextPetId = data.petId === undefined ? current.petId : Number(data.petId);
+    const client = await clientRepository.findById(nextClientId, clinicId);
+    const pet = await petRepository.findById(nextPetId);
+    if (!client || !pet || pet.clientId !== nextClientId) {
+      throw new AppError('Client and pet must belong to the active clinic', 400);
+    }
+  }
+
+  const editableFields = ['date', 'duration', 'status', 'serviceType', 'notes', 'clientId', 'petId'];
+  const updateData = Object.fromEntries(
+    editableFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
+      .map((field) => [field, data[field]])
+  );
+  const item = await repository.update(appointmentId, clinicId, updateData);
   if (!item) {
     throw new AppError('Appointment not found', 404);
   }

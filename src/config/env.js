@@ -36,6 +36,18 @@ if (error) {
   process.exit(1);
 }
 
+if (value.NODE_ENV === 'production') {
+  if (value.JWT_SECRET === 'your-secret-key-change-in-production' || value.JWT_SECRET.length < 32) {
+    console.error('JWT_SECRET must contain at least 32 non-default characters in production');
+    process.exit(1);
+  }
+
+  if (value.BOOTSTRAP_SUPERADMIN_TOKEN && value.BOOTSTRAP_SUPERADMIN_TOKEN.length < 32) {
+    console.error('BOOTSTRAP_SUPERADMIN_TOKEN must contain at least 32 characters in production');
+    process.exit(1);
+  }
+}
+
 module.exports.env = {
   nodeEnv: value.NODE_ENV,
   port: value.PORT,

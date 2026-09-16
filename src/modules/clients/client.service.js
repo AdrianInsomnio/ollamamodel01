@@ -80,23 +80,33 @@ const getClientHistory = async (id, clinicId) => {
 const update = async (id, clinicId, data) => {
   await getById(id, clinicId);
 
+  const editableFields = [
+    'name', 'documentId', 'phone', 'phone2', 'email', 'address',
+    'birthDate', 'notes', 'isActive',
+  ];
+  const updateData = Object.fromEntries(
+    editableFields
+      .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
+      .map((field) => [field, data[field]])
+  );
+
   // Validar email si se actualiza
-  if (data.email) {
-    if (!isValidEmail(data.email)) {
+  if (updateData.email) {
+    if (!isValidEmail(updateData.email)) {
       throw new AppError('Invalid email format', 400);
     }
-    const existingEmail = await repository.findByEmail(data.email, clinicId);
+    const existingEmail = await repository.findByEmail(updateData.email, clinicId);
     if (existingEmail && existingEmail.id !== id) {
       throw new AppError('Email already in use', 400);
     }
   }
 
   // Validar teléfono si se actualiza
-  if (data.phone && !isValidPhone(data.phone)) {
+  if (updateData.phone && !isValidPhone(updateData.phone)) {
     throw new AppError('Invalid phone format', 400);
   }
 
-  return await repository.update(id, clinicId, data);
+  return await repository.update(id, clinicId, updateData);
 };
 
 const remove = async (id, clinicId) => {

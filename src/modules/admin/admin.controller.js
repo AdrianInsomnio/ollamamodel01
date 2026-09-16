@@ -86,7 +86,7 @@ const updateUserClinics = async (req, res, next) => {
       throw new AppError('Access denied', 403, 'FORBIDDEN');
     }
     const { clinicIds } = req.body;
-    await service.updateUserClinics(req.params.userId, clinicIds);
+    await service.updateUserClinics(req.params.userId, clinicIds, user);
     res.status(200).json({ message: 'Clinicas actualizadas' });
   } catch (error) {
     next(error);
