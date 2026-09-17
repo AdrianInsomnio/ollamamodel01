@@ -410,6 +410,7 @@ module.exports = {
   findAll,
   findMine,
   createActivity,
+  listVeterinarianAvailability,
   assignVeterinarian,
   findQueue,
   findById,
