@@ -38,6 +38,116 @@ const findAll = async (clinicId) => {
   });
 };
 
+const findMine = async (clinicId, veterinarianId, filters = {}) => {
+  const { search, patient, client, from, to, status, page = 1, limit = 20 } = filters;
+  const and = [];
+  const where = {
+    clinicId,
+    veterinarianId,
+    ...(status ? { status } : {}),
+  };
+  if (search) {
+    and.push({ OR: [
+      { pet: { name: { contains: search } } },
+      { client: { name: { contains: search } } },
+    ] });
+  } else {
+    if (patient) and.push({ pet: { name: { contains: patient } } });
+    if (client) and.push({ client: { name: { contains: client } } });
+  }
+  const start = from ? new Date(`${from}T00:00:00.000Z`) : null;
+  const end = to ? new Date(`${to}T23:59:59.999Z`) : null;
+  if (start && !Number.isNaN(start.getTime())) {
+    and.push({ OR: [
+      { startAt: { gte: start, ...(end ? { lte: end } : {}) } },
+      { startAt: null, createdAt: { gte: start, ...(end ? { lte: end } : {}) } },
+    ] });
+  } else if (end && !Number.isNaN(end.getTime())) {
+    and.push({ OR: [
+      { startAt: { lte: end } },
+      { startAt: null, createdAt: { lte: end } },
+    ] });
+  }
+  if (and.length) where.AND = and;
+
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+  const [items, total] = await prisma.$transaction([
+    prisma.consultation.findMany({
+      where,
+      include: { pet: true, client: true, appointment: true, diagnoses: true, treatments: true, prescriptions: true, consultorio: consultorioInclude, veterinarianActivities: { orderBy: { createdAt: 'asc' } } },
+      orderBy: [{ startAt: 'desc' }, { createdAt: 'desc' }],
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
+    }),
+    prisma.consultation.count({ where }),
+  ]);
+  const hydratedItems = items.map((item) => {
+    const ended = item.veterinarianActivities?.find((activity) => activity.action === 'CONSULTATION_ENDED');
+    const metadata = ended?.metadata && typeof ended.metadata === 'object' ? ended.metadata : {};
+    return {
+      ...item,
+      historyStartedAt: metadata.startedAt || item.startAt,
+      historyEndedAt: metadata.endedAt || item.endAt,
+      historyConsultorioName: metadata.consultorioName || item.consultorio?.name || null,
+    };
+  });
+  return { items: hydratedItems, total, page: safePage, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) };
+};
+
+const createActivity = async ({ veterinarianId, clinicId, consultationId, consultorioId, action, metadata }) => {
+  return prisma.veterinarianActivity.create({
+    data: { veterinarianId, clinicId, consultationId, consultorioId, action, metadata },
+  });
+};
+
+const listVeterinarianAvailability = async (clinicId) => {
+  const veterinarians = await prisma.user.findMany({
+    where: {
+      role: { in: ['VET', 'VETERINARIAN'] },
+      isActive: true,
+      clinics: { some: { id: Number(clinicId) } },
+    },
+    select: { id: true, username: true },
+    orderBy: { username: 'asc' },
+  });
+
+  if (!veterinarians.length) return [];
+
+  const activities = await prisma.veterinarianActivity.findMany({
+    where: {
+      clinicId: Number(clinicId),
+      veterinarianId: { in: veterinarians.map((vet) => vet.id) },
+      action: { in: ['AVAILABILITY_ON', 'AVAILABILITY_OFF'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { veterinarianId: true, action: true, createdAt: true },
+  });
+
+  const latestByVet = new Map();
+  for (const activity of activities) {
+    if (!latestByVet.has(activity.veterinarianId)) latestByVet.set(activity.veterinarianId, activity);
+  }
+
+  return veterinarians.map((vet) => {
+    const latest = latestByVet.get(vet.id);
+    return {
+      id: vet.id,
+      username: vet.username,
+      available: latest?.action === 'AVAILABILITY_ON',
+      updatedAt: latest?.createdAt || null,
+    };
+  });
+};
+
+const assignVeterinarian = async (id, clinicId, veterinarianId) => {
+  return prisma.consultation.update({
+    where: { id },
+    data: { veterinarianId },
+    include: { pet: true, client: true, appointment: true, diagnoses: true, treatments: true, prescriptions: true, consultorio: consultorioInclude },
+  });
+};
+
 const findQueue = async (clinicId) => {
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
   const { startOfDay, endOfDay } = getClinicDayBounds(clinic);
@@ -179,7 +289,7 @@ const remove = async (id, clinicId) => {
   });
 };
 
-const updateStatus = async (id, clinicId, status, closedAt = null) => {
+const updateStatus = async (id, clinicId, status, closedAt = null, veterinarianId = null) => {
   const consultation = await prisma.consultation.findFirst({
     where: { id, clinicId },
     select: { id: true },
@@ -191,6 +301,7 @@ const updateStatus = async (id, clinicId, status, closedAt = null) => {
     data: {
       status,
       ...(closedAt && { closedAt }),
+      ...(veterinarianId ? { veterinarianId } : {}),
       ...(status === 'CLOSED' && { consultorioId: null, startAt: null, endAt: null })
     },
     include: {
@@ -297,6 +408,9 @@ const releaseConsultorio = async (id, clinicId) => {
 module.exports = {
   create,
   findAll,
+  findMine,
+  createActivity,
+  assignVeterinarian,
   findQueue,
   findById,
   findByAppointmentId,

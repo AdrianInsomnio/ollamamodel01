@@ -17,38 +17,44 @@ const validateMedicalData = (data) => {
   }
 };
 
-const create = async (data, clinicId) => {
+const create = async (data, clinicId, actor = null) => {
+  const veterinarianId = actor && ['VET', 'VETERINARIAN'].includes(actor.role)
+    ? actor.id
+    : null;
+  const consultationData = { ...data };
+  delete consultationData.veterinarianId;
+  if (veterinarianId) consultationData.veterinarianId = veterinarianId;
   // Validar campos requeridos
-  if (!data.petId || !data.clientId) {
+  if (!consultationData.petId || !consultationData.clientId) {
     throw new AppError('Pet and client are required', 400);
   }
-  if (data.priority !== undefined && !validPriorities.includes(data.priority)) {
+  if (consultationData.priority !== undefined && !validPriorities.includes(consultationData.priority)) {
     throw new AppError('Invalid consultation priority', 400);
   }
 
   // Validar que la mascota existe
-  const pet = await petRepository.findById(data.petId);
+  const pet = await petRepository.findById(consultationData.petId);
   if (!pet) {
     throw new AppError('Pet not found', 404);
   }
 
   // Validar que la mascota pertenece al cliente
-  if (pet.clientId !== data.clientId) {
+  if (pet.clientId !== consultationData.clientId) {
     throw new AppError('Pet does not belong to this client', 400);
   }
 
   // Validar que el cliente existe
-  const client = await clientRepository.findById(data.clientId, clinicId);
+  const client = await clientRepository.findById(consultationData.clientId, clinicId);
   if (!client) {
     throw new AppError('Client not found', 404);
   }
 
   // Validar datos médicos
-  validateMedicalData(data);
+  validateMedicalData(consultationData);
 
   // Si hay una cita asociada, validarla
-  if (data.appointmentId) {
-    const appointment = await appointmentRepository.findById(data.appointmentId, clinicId);
+  if (consultationData.appointmentId) {
+    const appointment = await appointmentRepository.findById(consultationData.appointmentId, clinicId);
     if (!appointment) {
       throw new AppError('Appointment not found', 404);
     }
@@ -56,9 +62,14 @@ const create = async (data, clinicId) => {
     // appointmentId es único: una cita no puede generar dos atenciones.
     // Si el usuario reintenta la misma acción, devolvemos la atención abierta
     // existente en lugar de provocar un error P2002 de Prisma.
-    const existingConsultation = await repository.findByAppointmentId(data.appointmentId, clinicId);
+    const existingConsultation = await repository.findByAppointmentId(consultationData.appointmentId, clinicId);
     if (existingConsultation) {
       if (existingConsultation.status === 'OPEN') {
+        if (veterinarianId && !existingConsultation.veterinarianId) {
+          const assigned = await repository.assignVeterinarian(existingConsultation.id, clinicId, veterinarianId);
+          await repository.createActivity({ veterinarianId, clinicId, consultationId: assigned.id, consultorioId: assigned.consultorioId, action: 'CONSULTATION_STARTED' });
+          return assigned;
+        }
         return existingConsultation;
       }
       throw new AppError('This appointment already has a closed consultation', 409);
@@ -66,19 +77,29 @@ const create = async (data, clinicId) => {
   }
 
   // Calcular tarifa total si se proporciona
-  if (data.consultationFee !== undefined || data.treatmentFee !== undefined) {
-    const consultationFee = data.consultationFee || 0;
-    const treatmentFee = data.treatmentFee || 0;
-    data.totalFee = consultationFee + treatmentFee;
+  if (consultationData.consultationFee !== undefined || consultationData.treatmentFee !== undefined) {
+    const consultationFee = consultationData.consultationFee || 0;
+    const treatmentFee = consultationData.treatmentFee || 0;
+    consultationData.totalFee = consultationFee + treatmentFee;
   }
 
   try {
-    return await repository.create(data, clinicId);
+    const item = await repository.create(consultationData, clinicId);
+    if (veterinarianId) {
+      await repository.createActivity({
+        veterinarianId,
+        clinicId,
+        consultationId: item.id,
+        consultorioId: item.consultorioId,
+        action: 'CONSULTATION_STARTED',
+      });
+    }
+    return item;
   } catch (error) {
     // Protege también contra dos solicitudes simultáneas que pasen el
     // chequeo anterior antes de que alguna de ellas termine de crear.
-    if (error?.code === 'P2002' && data.appointmentId) {
-      const existingConsultation = await repository.findByAppointmentId(data.appointmentId, clinicId);
+    if (error?.code === 'P2002' && consultationData.appointmentId) {
+      const existingConsultation = await repository.findByAppointmentId(consultationData.appointmentId, clinicId);
       if (existingConsultation?.status === 'OPEN') return existingConsultation;
       if (existingConsultation) {
         throw new AppError('This appointment already has a closed consultation', 409);
@@ -90,6 +111,27 @@ const create = async (data, clinicId) => {
 
 const getAll = async (clinicId) => {
   return await repository.findAll(clinicId);
+};
+
+const getMine = async (clinicId, veterinarianId, filters) => {
+  return repository.findMine(clinicId, veterinarianId, filters);
+};
+
+const getVeterinarianAvailability = async (clinicId) => repository.listVeterinarianAvailability(clinicId);
+
+const setVeterinarianAvailability = async (clinicId, actor, available) => {
+  if (!['VET', 'VETERINARIAN'].includes(actor.role)) {
+    throw new AppError('Only veterinarians can change their availability', 403);
+  }
+  if (typeof available !== 'boolean') {
+    throw new AppError('available must be a boolean', 400);
+  }
+  return repository.createActivity({
+    veterinarianId: actor.id,
+    clinicId,
+    action: available ? 'AVAILABILITY_ON' : 'AVAILABILITY_OFF',
+    metadata: { source: 'workstation' },
+  });
 };
 
 const getQueue = async (clinicId) => repository.findQueue(clinicId);
@@ -201,7 +243,7 @@ const remove = async (id, clinicId) => {
   return await repository.remove(id, clinicId);
 };
 
-const close = async (id, clinicId, closeData) => {
+const close = async (id, clinicId, closeData, actor = null) => {
   const { items = [], paymentMethod, discount = 0 } = closeData || {};
 
   // Validar que la consulta existe
@@ -243,7 +285,25 @@ const close = async (id, clinicId, closeData) => {
   }
 
   // Cerrar la consulta
-  const closedConsultation = await repository.updateStatus(id, clinicId, 'CLOSED', new Date());
+  const veterinarianId = actor && ['VET', 'VETERINARIAN'].includes(actor.role)
+    ? actor.id
+    : consultation.veterinarianId;
+  const endedAt = new Date();
+  const closedConsultation = await repository.updateStatus(id, clinicId, 'CLOSED', endedAt, veterinarianId);
+  if (veterinarianId) {
+    await repository.createActivity({
+      veterinarianId,
+      clinicId,
+      consultationId: id,
+      consultorioId: consultation.consultorioId,
+      action: 'CONSULTATION_ENDED',
+      metadata: {
+        startedAt: consultation.startAt?.toISOString?.() ?? consultation.createdAt,
+        endedAt: endedAt.toISOString(),
+        consultorioName: consultation.consultorio?.name ?? null,
+      },
+    });
+  }
 
   // Preparar datos para impresión (ticket 80mm)
   const printData = sale ? {
@@ -303,6 +363,9 @@ const releaseConsultorio = async (id, clinicId) => {
 module.exports = {
   create,
   getAll,
+  getMine,
+  getVeterinarianAvailability,
+  setVeterinarianAvailability,
   getQueue,
   getById,
   getPetHistory,

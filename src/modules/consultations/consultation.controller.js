@@ -2,7 +2,7 @@ const service = require('./consultation.service');
 
 const create = async (req, res, next) => {
   try {
-    const item = await service.create(req.body, req.user.clinicId);
+    const item = await service.create(req.body, req.user.clinicId, req.user);
     res.status(201).json(item);
   } catch (error) {
     next(error);
@@ -11,8 +11,50 @@ const create = async (req, res, next) => {
 
 const getAll = async (req, res, next) => {
   try {
-    const items = await service.getAll(req.user.clinicId);
+    const items = ['VET', 'VETERINARIAN'].includes(req.user.role)
+      ? (await service.getMine(req.user.clinicId, req.user.id, {})).items
+      : await service.getAll(req.user.clinicId);
     res.json({ consultations: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMine = async (req, res, next) => {
+  try {
+    const result = await service.getMine(req.user.clinicId, req.user.id, {
+      search: typeof req.query.search === 'string' ? req.query.search.trim() : undefined,
+      patient: typeof req.query.patient === 'string' ? req.query.patient.trim() : undefined,
+      client: typeof req.query.client === 'string' ? req.query.client.trim() : undefined,
+      from: req.query.from,
+      to: req.query.to,
+      status: req.query.status,
+      page: req.query.page,
+      limit: req.query.limit,
+    });
+    res.json({ consultations: result.items, pagination: {
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      totalPages: result.totalPages,
+    }});
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getVeterinarianAvailability = async (req, res, next) => {
+  try {
+    res.json({ veterinarians: await service.getVeterinarianAvailability(req.user.clinicId) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const setVeterinarianAvailability = async (req, res, next) => {
+  try {
+    await service.setVeterinarianAvailability(req.user.clinicId, req.user, req.body.available);
+    res.json({ available: req.body.available });
   } catch (error) {
     next(error);
   }
@@ -92,7 +134,7 @@ const update = async (req, res, next) => {
 
 const close = async (req, res, next) => {
   try {
-    const result = await service.close(parseInt(req.params.id), req.user.clinicId, req.body);
+    const result = await service.close(parseInt(req.params.id), req.user.clinicId, req.body, req.user);
     res.json(result);
   } catch (error) {
     next(error);
@@ -134,6 +176,9 @@ const remove = async (req, res, next) => {
 
 module.exports = {
   create,
+  getMine,
+  getVeterinarianAvailability,
+  setVeterinarianAvailability,
   getAll,
   getQueue,
   getById,

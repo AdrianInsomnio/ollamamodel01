@@ -40,11 +40,12 @@ model Clinic {
   services             Service[]
   users                User[]               @relation("UserClinics")
 
-  cashRegisters   CashRegister[]
-  cashShifts      CashShift[]
-  cashMovements   CashMovement[]
-  ticketPrints    TicketPrint[]
-  cashAuditEvents CashAuditEvent[]
+  cashRegisters          CashRegister[]
+  cashShifts             CashShift[]
+  cashMovements          CashMovement[]
+  ticketPrints           TicketPrint[]
+  cashAuditEvents        CashAuditEvent[]
+  veterinarianActivities VeterinarianActivity[]
 
   subscriptionInstallments SubscriptionInstallment[]
 
@@ -73,11 +74,13 @@ model User {
   clinics           Clinic[]        @relation("UserClinics")
   stockMovements    StockMovement[]
 
-  cashShifts      CashShift[]
-  cashMovements   CashMovement[]
-  sales           Sale[]
-  ticketPrints    TicketPrint[]
-  cashAuditEvents CashAuditEvent[]
+  cashShifts                CashShift[]
+  cashMovements             CashMovement[]
+  sales                     Sale[]
+  ticketPrints              TicketPrint[]
+  cashAuditEvents           CashAuditEvent[]
+  veterinarianConsultations Consultation[]         @relation("VeterinarianConsultations")
+  veterinarianActivities    VeterinarianActivity[]
 
   @@index([organizationId], map: "users_organizationId_fkey")
   @@map("users")
@@ -348,31 +351,34 @@ model SubscriptionInstallment {
 }
 
 model Consultation {
-  id              Int              @id @default(autoincrement())
-  petId           Int
-  clientId        Int
-  appointmentId   Int?             @unique(map: "Consultation_appointmentId_key")
-  weight          Float?
-  temperature     Float?
-  symptoms        String?
-  notes           String?
-  consultationFee Float            @default(0)
-  treatmentFee    Float            @default(0)
-  totalFee        Float            @default(0)
-  status          String           @default("OPEN")
-  closedAt        DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  clinicId        Int
-  appointment     Appointment?     @relation(fields: [appointmentId], references: [id], map: "Consultation_appointmentId_fkey")
-  client          Client           @relation(fields: [clientId], references: [id], map: "Consultation_clientId_fkey")
-  clinic          Clinic           @relation(fields: [clinicId], references: [id], map: "Consultation_clinicId_fkey")
-  pet             Pet              @relation(fields: [petId], references: [id], map: "Consultation_petId_fkey")
-  diagnoses       Diagnosis[]
-  fiscalDocuments FiscalDocument[]
-  prescriptions   Prescription[]
-  sales           Sale[]
-  treatments      Treatment[]
+  id                     Int                    @id @default(autoincrement())
+  petId                  Int
+  clientId               Int
+  appointmentId          Int?                   @unique(map: "Consultation_appointmentId_key")
+  weight                 Float?
+  temperature            Float?
+  symptoms               String?
+  notes                  String?
+  consultationFee        Float                  @default(0)
+  treatmentFee           Float                  @default(0)
+  totalFee               Float                  @default(0)
+  status                 String                 @default("OPEN")
+  closedAt               DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  clinicId               Int
+  veterinarianId         Int?
+  appointment            Appointment?           @relation(fields: [appointmentId], references: [id], map: "Consultation_appointmentId_fkey")
+  client                 Client                 @relation(fields: [clientId], references: [id], map: "Consultation_clientId_fkey")
+  clinic                 Clinic                 @relation(fields: [clinicId], references: [id], map: "Consultation_clinicId_fkey")
+  veterinarian           User?                  @relation("VeterinarianConsultations", fields: [veterinarianId], references: [id])
+  pet                    Pet                    @relation(fields: [petId], references: [id], map: "Consultation_petId_fkey")
+  diagnoses              Diagnosis[]
+  fiscalDocuments        FiscalDocument[]
+  prescriptions          Prescription[]
+  sales                  Sale[]
+  treatments             Treatment[]
+  veterinarianActivities VeterinarianActivity[]
 
   consultorioId Int?
   startAt       DateTime?
@@ -387,7 +393,27 @@ model Consultation {
   @@index([clientId], map: "Consultation_clientId_fkey")
   @@index([clinicId], map: "Consultation_clinicId_fkey")
   @@index([petId], map: "Consultation_petId_fkey")
+  @@index([clinicId, veterinarianId, createdAt])
   @@map("consultations")
+}
+
+model VeterinarianActivity {
+  id             Int           @id @default(autoincrement())
+  veterinarianId Int
+  clinicId       Int
+  consultationId Int?
+  consultorioId  Int?
+  action         String
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  veterinarian   User          @relation(fields: [veterinarianId], references: [id])
+  clinic         Clinic        @relation(fields: [clinicId], references: [id])
+  consultation   Consultation? @relation(fields: [consultationId], references: [id])
+  consultorio    Consultorio?  @relation(fields: [consultorioId], references: [id])
+
+  @@index([veterinarianId, clinicId, createdAt])
+  @@index([consultationId])
+  @@map("veterinarian_activities")
 }
 
 model Diagnosis {
@@ -898,8 +924,9 @@ model Consultorio {
 
   clinic Clinic @relation(fields: [clinicId], references: [id])
 
-  equipment     ConsultorioEquipment[]
-  consultations Consultation[]
+  equipment              ConsultorioEquipment[]
+  consultations          Consultation[]
+  veterinarianActivities VeterinarianActivity[]
 
   @@unique([clinicId, name])
   @@index([clinicId])
