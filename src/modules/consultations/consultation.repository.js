@@ -121,7 +121,7 @@ const listVeterinarianAvailability = async (clinicId) => {
       action: { in: ['AVAILABILITY_ON', 'AVAILABILITY_OFF'] },
     },
     orderBy: { createdAt: 'desc' },
-    select: { veterinarianId: true, action: true, createdAt: true },
+    select: { veterinarianId: true, action: true, createdAt: true, metadata: true },
   });
 
   const latestByVet = new Map();
@@ -131,11 +131,19 @@ const listVeterinarianAvailability = async (clinicId) => {
 
   return veterinarians.map((vet) => {
     const latest = latestByVet.get(vet.id);
+    const metadata = latest?.metadata && typeof latest.metadata === 'object' ? latest.metadata : {};
+    const durationMinutes = Number.isInteger(Number(metadata.durationMinutes)) ? Number(metadata.durationMinutes) : 240;
+    const expiresAt = latest?.action === 'AVAILABILITY_ON'
+      ? new Date(new Date(latest.createdAt).getTime() + durationMinutes * 60 * 1000)
+      : null;
+    const availabilityExpired = Boolean(expiresAt && Date.now() >= expiresAt.getTime());
     return {
       id: vet.id,
       username: vet.username,
-      available: latest?.action === 'AVAILABILITY_ON',
+      available: latest?.action === 'AVAILABILITY_ON' && !availabilityExpired,
       updatedAt: latest?.createdAt || null,
+      durationMinutes: latest?.action === 'AVAILABILITY_ON' ? durationMinutes : null,
+      expiresAt: expiresAt?.toISOString() || null,
     };
   });
 };

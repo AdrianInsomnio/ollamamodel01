@@ -11,7 +11,7 @@ const create = async (req, res, next) => {
 
 const getAll = async (req, res, next) => {
   try {
-    const items = await service.getAll(req.user.clinicId);
+    const items = await service.getAll(req.user.clinicId, req.query.date);
     res.json({ appointments: items });
   } catch (error) {
     next(error);

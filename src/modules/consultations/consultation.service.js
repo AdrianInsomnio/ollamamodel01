@@ -119,18 +119,21 @@ const getMine = async (clinicId, veterinarianId, filters) => {
 
 const getVeterinarianAvailability = async (clinicId) => repository.listVeterinarianAvailability(clinicId);
 
-const setVeterinarianAvailability = async (clinicId, actor, available) => {
+const setVeterinarianAvailability = async (clinicId, actor, available, durationMinutes = 240) => {
   if (!['VET', 'VETERINARIAN'].includes(actor.role)) {
     throw new AppError('Only veterinarians can change their availability', 403);
   }
   if (typeof available !== 'boolean') {
     throw new AppError('available must be a boolean', 400);
   }
+  if (available && (!Number.isInteger(Number(durationMinutes)) || Number(durationMinutes) < 30 || Number(durationMinutes) > 240)) {
+    throw new AppError('durationMinutes must be between 30 and 240 minutes', 400);
+  }
   return repository.createActivity({
     veterinarianId: actor.id,
     clinicId,
     action: available ? 'AVAILABILITY_ON' : 'AVAILABILITY_OFF',
-    metadata: { source: 'workstation' },
+    metadata: { source: 'workstation', ...(available ? { durationMinutes: Number(durationMinutes) } : {}) },
   });
 };
 

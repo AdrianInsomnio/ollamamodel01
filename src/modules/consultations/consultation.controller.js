@@ -53,7 +53,7 @@ const getVeterinarianAvailability = async (req, res, next) => {
 
 const setVeterinarianAvailability = async (req, res, next) => {
   try {
-    await service.setVeterinarianAvailability(req.user.clinicId, req.user, req.body.available);
+    await service.setVeterinarianAvailability(req.user.clinicId, req.user, req.body.available, req.body.durationMinutes);
     res.json({ available: req.body.available });
   } catch (error) {
     next(error);

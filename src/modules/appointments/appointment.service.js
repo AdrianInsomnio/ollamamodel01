@@ -49,8 +49,22 @@ const create = async (data, clinicId) => {
   return await repository.create({ ...data, date }, clinicId);
 };
 
-const getAll = async (clinicId) => {
-  return await repository.findAll(clinicId);
+const getAll = async (clinicId, date) => {
+  if (!date) return await repository.findAll(clinicId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new AppError('Invalid date', 400);
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
+  const { startOfDay, endOfDay } = getDayBoundsForDate(String(date), clinic?.timezone);
+  return await repository.findByDateRange(startOfDay, endOfDay, clinicId);
+};
+
+const getDayBoundsForDate = (date, timezone = 'America/Montevideo') => {
+  const [year, month, day] = date.split('-').map(Number);
+  const localDateAsUtc = Date.UTC(year, month - 1, day);
+  const offsetPart = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'longOffset' }).formatToParts(new Date(localDateAsUtc)).find((part) => part.type === 'timeZoneName')?.value;
+  const offset = offsetPart?.match(/GMT([+-])(\d{2}):(\d{2})/);
+  const offsetMinutes = offset ? (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '-' ? -1 : 1) : 0;
+  const startOfDay = new Date(localDateAsUtc - offsetMinutes * 60000);
+  return { startOfDay, endOfDay: new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000) };
 };
 
 const getById = async (id, clinicId) => {
