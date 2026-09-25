@@ -39,7 +39,7 @@ const getById = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const item = await service.updateSale(saleIdFromRequest(req), req.body, req.user.clinicId, req.user.id);
+      const item = await service.updateSale(saleIdFromRequest(req), req.body, req.user.clinicId, req.user.id, req.user.role);
     res.json(item);
   } catch (error) {
     next(error);

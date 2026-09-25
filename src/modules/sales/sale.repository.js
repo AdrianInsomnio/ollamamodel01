@@ -186,8 +186,38 @@ const findById = async (id, clinicId) => {
 };
 
 const createWaitingSaleAtomic = async ({ saleData, items, clinicId, userId, cashShiftId }) => {
-  return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`
+    return prisma.$transaction(async (tx) => {
+      if (saleData.consultationId) {
+        const consultation = await tx.consultation.findFirst({
+          where: {
+            id: saleData.consultationId,
+            clinicId,
+            clientId: saleData.clientId,
+            petId: saleData.petId,
+          },
+          select: { id: true },
+        });
+        if (!consultation) throw new AppError('La atención no pertenece a esta clínica, cliente o mascota', 404);
+        await tx.$queryRaw`
+          SELECT id
+          FROM consultations
+          WHERE id = ${saleData.consultationId} AND clinicId = ${clinicId}
+          FOR UPDATE
+        `;
+        const existingWaitingSale = await tx.sale.findFirst({
+          where: { consultationId: saleData.consultationId, clinicId, status: SALE_STATUS.WAITING },
+          include: {
+            client: { select: { id: true, name: true } },
+            pet: { select: { id: true, name: true } },
+            saleItems: true,
+            payments: true,
+            cashShift: { include: { cashRegister: true } },
+          },
+        });
+        if (existingWaitingSale) return existingWaitingSale;
+      }
+
+      await tx.$queryRaw`
       SELECT id
       FROM cash_shifts
       WHERE id = ${cashShiftId} AND clinicId = ${clinicId}
@@ -205,7 +235,7 @@ const createWaitingSaleAtomic = async ({ saleData, items, clinicId, userId, cash
         ...saleData,
         clinicId,
         cashShiftId,
-        userId,
+          userId,
         status: SALE_STATUS.WAITING,
         paymentMethod: null,
         updatedAt: new Date(),
@@ -605,7 +635,7 @@ const correctSaleAtomic = async ({ id, clinicId, userId, reason, saleData, items
   });
 };
 
-const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMovements, payments, reason }) => {
+  const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMovements, payments, reason, preserveWaiting = false }) => {
   return prisma.$transaction(async (tx) => {
     const sale = await tx.sale.findFirst({
       where: { id, clinicId },
@@ -630,7 +660,7 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
     if (!effectiveShift || effectiveShift.status !== 'OPEN') {
       throw new AppError('No puede modificarse este ticket porque el turno ya fue cerrado', 400, 'CASH_SHIFT_CLOSED');
     }
-    if (userId != null && effectiveShift.userId !== userId) {
+      if (!preserveWaiting && userId != null && effectiveShift.userId !== userId) {
       throw new AppError('El usuario no tiene acceso al turno de caja', 403, 'CASH_SHIFT_ACCESS_DENIED');
     }
 
@@ -681,13 +711,13 @@ const updateSaleAtomic = async ({ id, clinicId, userId, saleData, items, stockMo
       });
     }
 
-    await tx.saleItem.deleteMany({ where: { saleId: id } });
-    const updatedSale = await tx.sale.update({
-      where: { id },
-      data: {
-        ...saleData,
-        cashShiftId: effectiveCashShiftId,
-        userId,
+      await tx.saleItem.deleteMany({ where: { saleId: id } });
+      const updatedSale = await tx.sale.update({
+        where: { id },
+        data: {
+          ...saleData,
+          cashShiftId: effectiveCashShiftId,
+          userId: preserveWaiting ? sale.userId : userId,
         saleItems: { create: items },
         payments: {
           create: payments.map((payment) => ({

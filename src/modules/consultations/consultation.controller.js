@@ -78,6 +78,15 @@ const getById = async (req, res, next) => {
   }
 };
 
+const start = async (req, res, next) => {
+  try {
+    const consultation = await service.start(Number(req.params.id), req.user.clinicId, req.user);
+    res.json({ consultation });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getPetHistory = async (req, res, next) => {
   try {
     const result = await service.getPetHistory(parseInt(req.params.petId), req.user.clinicId);
@@ -182,6 +191,7 @@ module.exports = {
   getAll,
   getQueue,
   getById,
+  start,
   getPetHistory,
   getClientConsultations,
   update,

@@ -16,6 +16,7 @@ router.get('/mine', authorize(ROLES.VET, 'VETERINARIAN'), controller.getMine);
 router.get('/', controller.getAll);
 router.get('/pet/:petId/history', controller.getPetHistory);
 router.get('/client/:clientId', controller.getClientConsultations);
+router.post('/:id/start', authorize(ROLES.VET, 'VETERINARIAN'), validate(schemas.consultationIdSchema, 'params'), controller.start);
 router.patch('/:id/consultorio', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), validate(schemas.consultationIdSchema, 'params'), validate(schemas.assignConsultorioSchema), controller.assignConsultorio);
 router.delete('/:id/consultorio', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), validate(schemas.consultationIdSchema, 'params'), controller.releaseConsultorio);
 router.delete('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER, ROLES.SUPER_ADMIN), validate(schemas.consultationIdSchema, 'params'), controller.remove);

@@ -179,6 +179,8 @@ const findById = async (id, clinicId) => {
       pet: true,
       client: true,
       appointment: true,
+      veterinarian: { select: { id: true, username: true } },
+      veterinarianActivities: { orderBy: { createdAt: 'asc' } },
       diagnoses: true,
       treatments: true,
       prescriptions: true,
@@ -189,11 +191,16 @@ const findById = async (id, clinicId) => {
 };
 
 const findByPetId = async (petId, clinicId) => {
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { timezone: true } });
+  const { startOfDay, endOfDay } = getClinicDayBounds(clinic);
   return await prisma.consultation.findMany({
     where: { petId, clinicId },
     include: {
       pet: true,
       client: true,
+      appointment: true,
+      veterinarian: { select: { id: true, username: true } },
+      veterinarianActivities: { where: { createdAt: { gte: startOfDay, lt: endOfDay } }, orderBy: { createdAt: 'asc' } },
       diagnoses: true,
       treatments: true,
       prescriptions: true,
@@ -437,4 +444,3 @@ module.exports = {
   assignConsultorio,
   releaseConsultorio
 };
-

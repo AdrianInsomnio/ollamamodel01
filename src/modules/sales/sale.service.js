@@ -439,10 +439,11 @@ const printSale = async (saleId, clinicId, userId, reason) => {
   };
 };
 
-const prepareWaitingItems = async (items, clinicId) => {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new AppError('La venta debe incluir al menos un item', 400);
-  }
+  const prepareWaitingItems = async (items, clinicId, allowEmpty = false) => {
+    if (!Array.isArray(items)) {
+      throw new AppError('Los items de la venta deben ser una lista', 400);
+    }
+    if (!allowEmpty && items.length === 0) throw new AppError('La venta debe incluir al menos un item', 400);
 
   const productIds = items.filter((item) => item.itemType === 'product').map((item) => item.itemId);
   const products = await productRepository.findByIds(productIds, clinicId);
@@ -493,7 +494,7 @@ const createWaitingSale = async (saleData, clinicId, userId) => {
     if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
   }
 
-  const items = await prepareWaitingItems(saleData.items, clinicId);
+    const items = await prepareWaitingItems(saleData.items, clinicId, saleData.allowEmpty === true);
   const { subtotal, discount, tax, total } = calculateSaleTotals(items, saleData.discount);
 
   const waitingPayload = { clientId: saleData.clientId, petId: saleData.petId, consultationId: saleData.consultationId, subtotal, discount, tax, total, notes: saleData.notes || null };
@@ -581,9 +582,33 @@ const prepareModifiedItems = async (items, clinicId, clientName) => {
   return { processedItems, stockMovements };
 };
 
-const updateSale = async (id, saleData, clinicId, userId) => {
-  const sale = await getById(id, clinicId);
-  if (isCancelledStatus(sale.status)) throw new AppError('No puede modificarse una venta cancelada', 400);
+  const updateSale = async (id, saleData, clinicId, userId, actorRole = null) => {
+    saleData = saleData || {};
+    const sale = await getById(id, clinicId);
+    if (isCancelledStatus(sale.status)) throw new AppError('No puede modificarse una venta cancelada', 400);
+    if (actorRole === 'VET') {
+      if (!saleData.keepWaiting || normalizeSaleStatus(sale.status) !== SALE_STATUS.WAITING) {
+        throw new AppError('El veterinario solo puede actualizar cuentas en espera vinculadas a su atención', 403, 'SALE_UPDATE_FORBIDDEN');
+      }
+      const consultation = sale.consultationId
+        ? await prisma.consultation.findFirst({ where: { id: sale.consultationId, clinicId, veterinarianId: userId } })
+        : null;
+      if (!consultation) throw new AppError('La cuenta no pertenece a una atención asignada a este veterinario', 403, 'SALE_CONSULTATION_ACCESS_DENIED');
+      const items = await prepareWaitingItems(saleData.items, clinicId);
+      const totals = calculateSaleTotals(items, saleData.discount);
+      const updated = await repository.updateSaleAtomic({
+        id,
+        clinicId,
+        userId,
+        preserveWaiting: true,
+        saleData: { ...totals, status: SALE_STATUS.WAITING, paymentMethod: sale.paymentMethod ?? null, notes: saleData.notes ?? sale.notes },
+        items,
+        stockMovements: [],
+        payments: [],
+        reason: 'Actualización clínica de cuenta en espera',
+      });
+      return { ...updated, status: normalizeSaleStatus(updated.status) };
+    }
   if (normalizeSaleStatus(sale.status) === SALE_STATUS.DRAFT && !saleData.paymentMethod && !saleData.confirm) {
     const clientId = saleData.clientId ?? sale.clientId;
     const petId = saleData.petId ?? sale.petId;
@@ -593,7 +618,7 @@ const updateSale = async (id, saleData, clinicId, userId) => {
       const pet = await prisma.pet.findFirst({ where: { id: petId, clientId } });
       if (!pet) throw new AppError('Mascota no encontrada o no pertenece al cliente', 404);
     }
-    const items = await prepareWaitingItems(saleData.items, clinicId);
+    const items = await prepareWaitingItems(saleData.items, clinicId, saleData.allowEmpty === true);
     const totals = calculateSaleTotals(items, saleData.discount);
     const updated = await repository.updateDraftSaleAtomic({
       id,

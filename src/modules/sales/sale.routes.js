@@ -56,10 +56,10 @@ router.get('/', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getAll
 // Ver detalle de venta: cualquier rol
 router.get('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getById);
 
-router.put(
-  '/:id',
-  authorize(ROLES.ADMIN, ROLES.USER),
-  idempotency('PUT /api/sales/:id'),
+  router.put(
+    '/:id',
+    authorize(ROLES.ADMIN, ROLES.USER, ROLES.VET),
+    idempotency('PUT /api/sales/:id'),
   controller.update,
 );
 
