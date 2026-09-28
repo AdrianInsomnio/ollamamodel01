@@ -64,7 +64,9 @@ const adjustStock = async (req, res, next) => {
 
 const getStockMovements = async (req, res, next) => {
   try {
-    res.json({ movements: await service.getStockMovements(Number(req.params.id), req.user.clinicId) });
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 10000) : undefined;
+    res.json({ movements: await service.getStockMovements(Number(req.params.id), req.user.clinicId, limit) });
   } catch (error) { next(error); }
 };
 

@@ -13,7 +13,7 @@ router.post('/', authorize(ROLES.ADMIN, ROLES.USER), controller.create);
 router.get('/', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getAll);
 
 // Ver detalle de producto: cualquier rol autenticado
-router.get('/:id/movements', authorize(ROLES.ADMIN), controller.getStockMovements);
+router.get('/:id/movements', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getStockMovements);
 router.post('/:id/stock-adjustment', authorize(ROLES.ADMIN), controller.adjustStock);
 router.get('/:id', authorize(ROLES.ADMIN, ROLES.VET, ROLES.USER), controller.getById);
 
