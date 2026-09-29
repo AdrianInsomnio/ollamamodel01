@@ -4,6 +4,7 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findTemplate: jest.fn(),
   findTemplateVersion: jest.fn(),
   createBatch: jest.fn(),
+  activateTemplateVersion: jest.fn(),
   findBatch: jest.fn(),
   findJob: jest.fn(),
   updateJob: jest.fn(),
@@ -111,5 +112,12 @@ describe('printing core service', () => {
 
     await expect(service.markJobFailed(91, 7, { error: 'paper jam' }))
       .rejects.toMatchObject({ code: 'PRINT_INVALID_TRANSITION', statusCode: 409 });
+  });
+
+  test('activates only a version resolved inside the clinic scope', async () => {
+    repository.activateTemplateVersion.mockResolvedValue({ id: 51, templateId: 60, status: 'ACTIVE' });
+
+    await expect(service.activateTemplateVersion(51, 7)).resolves.toMatchObject({ id: 51, status: 'ACTIVE' });
+    expect(repository.activateTemplateVersion).toHaveBeenCalledWith(51, 7);
   });
 });

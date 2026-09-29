@@ -17,10 +17,11 @@ const wrap = (handler) => async (req, res, next) => {
 };
 
 const create = (method) => wrap(async (req, res) => res.status(201).json(await service[method](req.body, clinicIdFromRequest(req))));
-const list = (method) => wrap(async (req, res) => res.json(await service[method](clinicIdFromRequest(req), req.query.take)));
+  const list = (method) => wrap(async (req, res) => res.json(await service[method](clinicIdFromRequest(req), req.query.take, req.query)));
 
   const createBatch = wrap(async (req, res) => res.status(201).json(await service.createBatch(req.body, clinicIdFromRequest(req), req.user.id)));
   const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
+  const activateTemplateVersion = wrap(async (req, res) => res.json(await service.activateTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
 
 module.exports = {
   clinicIdFromRequest,
@@ -30,7 +31,7 @@ module.exports = {
   createPrinter: create('createPrinter'), listPrinters: list('listPrinters'),
   createTarget: create('createTarget'), listTargets: list('listTargets'),
   createTemplate: create('createTemplate'), listTemplates: list('listTemplates'),
-  createTemplateVersion: create('createTemplateVersion'),
+    createTemplateVersion: create('createTemplateVersion'), activateTemplateVersion,
   createAsset: create('createAsset'), listAssets: list('listAssets'),
     createBatch, listBatches: list('listBatches'),
     markJobSent: jobAction('markJobSent'), markJobPrinted: jobAction('markJobPrinted'),

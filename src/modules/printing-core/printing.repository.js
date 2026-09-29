@@ -33,6 +33,14 @@ const listTemplates = (clinicId) => prisma.printTemplate.findMany({
 });
 const createTemplate = (data, clinicId) => prisma.printTemplate.create({ data: { ...data, clinicId } });
 const createTemplateVersion = (data) => prisma.printTemplateVersion.create({ data });
+const activateTemplateVersion = async (id, clinicId) => {
+  const version = await findTemplateVersion(id, clinicId);
+  if (!version) return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.printTemplateVersion.updateMany({ where: { templateId: version.templateId }, data: { status: 'ARCHIVED' } });
+    return tx.printTemplateVersion.update({ where: { id }, data: { status: 'ACTIVE' } });
+  });
+};
 
 const listAssets = (clinicId) => prisma.printAsset.findMany({ where: { clinicId }, orderBy: { name: 'asc' } });
 const createAsset = (data, clinicId) => prisma.printAsset.create({ data: { ...data, clinicId } });
@@ -64,8 +72,8 @@ const createBatch = (data) => prisma.printBatch.create({
   include: { jobs: true }
 });
 
-const listBatches = (clinicId, take = 50) => prisma.printBatch.findMany({
-  where: { clinicId },
+const listBatches = (clinicId, take = 50, filters = {}) => prisma.printBatch.findMany({
+  where: { clinicId, ...(filters.status ? { status: filters.status } : {}), ...(filters.sourceDocumentType ? { sourceDocumentType: filters.sourceDocumentType } : {}) },
   take,
   orderBy: { createdAt: 'desc' },
   include: { jobs: true }
@@ -82,8 +90,8 @@ module.exports = {
   listProfiles, createProfile, findProfile,
   listPrinters, createPrinter,
   listTargets, createTarget,
-  listTemplates, createTemplate, createTemplateVersion,
+  listTemplates, createTemplate,
   listAssets, createAsset,
   findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion,
-    createBatch, listBatches, findBatch, findJob, updateJob, updateBatchStatus
+  createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus
 };

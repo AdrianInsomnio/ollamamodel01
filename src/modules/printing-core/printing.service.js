@@ -144,7 +144,13 @@ const createBatch = async (data, clinicId, requestedById) => {
   return repository.createBatch({ ...data, clinicId, requestedById, variant, jobs });
 };
 
-  const listBatches = (clinicId, take) => repository.listBatches(clinicId, Math.min(Number(take) || 50, 100));
+  const listBatches = (clinicId, take, filters = {}) => repository.listBatches(clinicId, Math.min(Number(take) || 50, 100), filters);
+
+  const activateTemplateVersion = async (versionId, clinicId) => {
+    const version = await repository.activateTemplateVersion(Number(versionId), clinicId);
+    if (!version) throw new AppError('TemplateVersion no encontrada o no autorizada', 404, 'PRINT_TEMPLATE_VERSION_NOT_FOUND');
+    return version;
+  };
 
   const JOB_TRANSITIONS = {
     SENT: new Set(['PENDING', 'RETRYING']),
@@ -189,7 +195,7 @@ const createBatch = async (data, clinicId, requestedById) => {
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
-  createTemplate, createTemplateVersion, createAsset, createBatch, listBatches,
+  createTemplate, createTemplateVersion, activateTemplateVersion, createAsset, createBatch, listBatches,
     buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
