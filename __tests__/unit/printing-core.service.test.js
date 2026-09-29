@@ -6,6 +6,7 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   createBatch: jest.fn(),
   activateTemplateVersion: jest.fn(),
   deactivateResource: jest.fn(),
+  updateResource: jest.fn(),
   findBatch: jest.fn(),
   findJob: jest.fn(),
   updateJob: jest.fn(),
@@ -132,5 +133,18 @@ describe('printing core service', () => {
   test('rejects unknown configuration resources', async () => {
     await expect(service.deactivateResource('users', 30, 7))
       .rejects.toMatchObject({ code: 'PRINT_RESOURCE_INVALID', statusCode: 400 });
+  });
+
+  test('updates only allowlisted fields of an active resource', async () => {
+    repository.updateResource.mockResolvedValue({ count: 1 });
+
+    await expect(service.updateResource('templates', 60, { name: 'Ticket venta v2', clinicId: 999, isActive: false }, 7))
+      .resolves.toEqual({ id: 60, resource: 'templates', updated: ['name'] });
+    expect(repository.updateResource).toHaveBeenCalledWith('printTemplate', 60, 7, { name: 'Ticket venta v2' });
+  });
+
+  test('rejects an empty or unsupported configuration update', async () => {
+    await expect(service.updateResource('printers', 30, { paperSize: 'A4' }, 7))
+      .rejects.toMatchObject({ code: 'PRINT_UPDATE_EMPTY', statusCode: 400 });
   });
 });

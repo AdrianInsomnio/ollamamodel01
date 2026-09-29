@@ -165,6 +165,27 @@ const createBatch = async (data, clinicId, requestedById) => {
     return { id: Number(id), resource, isActive: false };
   };
 
+  const UPDATE_FIELDS = Object.freeze({
+    locations: { model: 'printLocation', fields: ['name', 'code'] },
+    agents: { model: 'printAgent', fields: ['name', 'endpoint', 'status'] },
+    profiles: { model: 'printerProfile', fields: ['name', 'paperTypes', 'capabilities'] },
+    printers: { model: 'printer', fields: ['name', 'orientation'] },
+    targets: { model: 'printTarget', fields: ['name'] },
+    templates: { model: 'printTemplate', fields: ['name', 'documentType'] },
+    assets: { model: 'printAsset', fields: ['name', 'storageKey', 'mimeType', 'width', 'height'] }
+  });
+
+  const updateResource = async (resource, id, data, clinicId) => {
+    const definition = UPDATE_FIELDS[resource];
+    if (!definition) throw new AppError('Recurso de impresión no soportado', 400, 'PRINT_RESOURCE_INVALID');
+    const update = Object.fromEntries(Object.entries(data || {}).filter(([key, value]) => definition.fields.includes(key) && value !== undefined));
+    if (!Object.keys(update).length) throw new AppError('No hay campos editables para actualizar', 400, 'PRINT_UPDATE_EMPTY');
+    if ('name' in update) requireName(update.name, 'name');
+    const result = await repository.updateResource(definition.model, Number(id), clinicId, update);
+    if (!result.count) throw new AppError('Recurso no encontrado o inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
+    return { id: Number(id), resource, updated: Object.keys(update) };
+  };
+
   const JOB_TRANSITIONS = {
     SENT: new Set(['PENDING', 'RETRYING']),
     PRINTED: new Set(['SENT']),
@@ -208,7 +229,7 @@ const createBatch = async (data, clinicId, requestedById) => {
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
-  createTemplate, createTemplateVersion, activateTemplateVersion, deactivateResource, createAsset, createBatch, listBatches,
+  createTemplate, createTemplateVersion, activateTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
     buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,

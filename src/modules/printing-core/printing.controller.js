@@ -23,6 +23,7 @@ const create = (method) => wrap(async (req, res) => res.status(201).json(await s
   const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
   const activateTemplateVersion = wrap(async (req, res) => res.json(await service.activateTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
   const deactivateResource = wrap(async (req, res) => res.json(await service.deactivateResource(req.params.resource, req.params.resourceId, clinicIdFromRequest(req))));
+  const updateResource = wrap(async (req, res) => res.json(await service.updateResource(req.params.resource, req.params.resourceId, req.body, clinicIdFromRequest(req))));
 
 module.exports = {
   clinicIdFromRequest,
@@ -32,7 +33,7 @@ module.exports = {
   createPrinter: create('createPrinter'), listPrinters: list('listPrinters'),
   createTarget: create('createTarget'), listTargets: list('listTargets'),
   createTemplate: create('createTemplate'), listTemplates: list('listTemplates'),
-    createTemplateVersion: create('createTemplateVersion'), activateTemplateVersion, deactivateResource,
+    createTemplateVersion: create('createTemplateVersion'), activateTemplateVersion, deactivateResource, updateResource,
   createAsset: create('createAsset'), listAssets: list('listAssets'),
     createBatch, listBatches: list('listBatches'),
     markJobSent: jobAction('markJobSent'), markJobPrinted: jobAction('markJobPrinted'),
