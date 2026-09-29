@@ -5,6 +5,7 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findTemplateVersion: jest.fn(),
   createBatch: jest.fn(),
   activateTemplateVersion: jest.fn(),
+  deactivateResource: jest.fn(),
   findBatch: jest.fn(),
   findJob: jest.fn(),
   updateJob: jest.fn(),
@@ -119,5 +120,17 @@ describe('printing core service', () => {
 
     await expect(service.activateTemplateVersion(51, 7)).resolves.toMatchObject({ id: 51, status: 'ACTIVE' });
     expect(repository.activateTemplateVersion).toHaveBeenCalledWith(51, 7);
+  });
+
+  test('deactivates only an allowlisted resource in the clinic scope', async () => {
+    repository.deactivateResource.mockResolvedValue({ count: 1 });
+
+    await expect(service.deactivateResource('printers', 30, 7)).resolves.toEqual({ id: 30, resource: 'printers', isActive: false });
+    expect(repository.deactivateResource).toHaveBeenCalledWith('printer', 30, 7);
+  });
+
+  test('rejects unknown configuration resources', async () => {
+    await expect(service.deactivateResource('users', 30, 7))
+      .rejects.toMatchObject({ code: 'PRINT_RESOURCE_INVALID', statusCode: 400 });
   });
 });

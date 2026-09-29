@@ -24,6 +24,7 @@ router.get('/templates', admins, controller.listTemplates);
 router.post('/templates', admins, validate(validation.createTemplate), controller.createTemplate);
   router.post('/templates/versions', admins, validate(validation.createTemplateVersion), controller.createTemplateVersion);
   router.post('/templates/versions/:versionId/activate', admins, controller.activateTemplateVersion);
+  router.post('/config/:resource/:resourceId/deactivate', admins, controller.deactivateResource);
 router.get('/assets', admins, controller.listAssets);
 router.post('/assets', admins, validate(validation.createAsset), controller.createAsset);
 router.get('/batches', controller.listBatches);

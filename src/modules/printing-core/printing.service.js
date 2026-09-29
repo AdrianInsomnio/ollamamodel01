@@ -152,6 +152,19 @@ const createBatch = async (data, clinicId, requestedById) => {
     return version;
   };
 
+  const RESOURCE_MODELS = Object.freeze({
+    locations: 'printLocation', agents: 'printAgent', profiles: 'printerProfile',
+    printers: 'printer', targets: 'printTarget', templates: 'printTemplate', assets: 'printAsset'
+  });
+
+  const deactivateResource = async (resource, id, clinicId) => {
+    const model = RESOURCE_MODELS[resource];
+    if (!model) throw new AppError('Recurso de impresión no soportado', 400, 'PRINT_RESOURCE_INVALID');
+    const result = await repository.deactivateResource(model, Number(id), clinicId);
+    if (!result.count) throw new AppError('Recurso no encontrado o ya inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
+    return { id: Number(id), resource, isActive: false };
+  };
+
   const JOB_TRANSITIONS = {
     SENT: new Set(['PENDING', 'RETRYING']),
     PRINTED: new Set(['SENT']),
@@ -195,7 +208,7 @@ const createBatch = async (data, clinicId, requestedById) => {
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
-  createTemplate, createTemplateVersion, activateTemplateVersion, createAsset, createBatch, listBatches,
+  createTemplate, createTemplateVersion, activateTemplateVersion, deactivateResource, createAsset, createBatch, listBatches,
     buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,

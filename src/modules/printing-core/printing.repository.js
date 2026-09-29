@@ -83,6 +83,7 @@ const findBatch = (id, clinicId) => prisma.printBatch.findFirst({ where: { id, c
 const findJob = (id, clinicId) => prisma.printJob.findFirst({ where: { id, clinicId }, include: { batch: true } });
 const updateJob = (id, clinicId, data) => prisma.printJob.updateMany({ where: { id, clinicId }, data });
 const updateBatchStatus = (id, clinicId, status) => prisma.printBatch.updateMany({ where: { id, clinicId }, data: { status } });
+const deactivateResource = (model, id, clinicId) => prisma[model].updateMany({ where: { id, clinicId, isActive: true }, data: { isActive: false } });
 
 module.exports = {
   listLocations, createLocation, findLocation,
@@ -93,5 +94,5 @@ module.exports = {
   listTemplates, createTemplate,
   listAssets, createAsset,
   findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion,
-  createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus
+  createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus, deactivateResource
 };
