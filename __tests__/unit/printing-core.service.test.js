@@ -3,7 +3,11 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findTarget: jest.fn(),
   findTemplate: jest.fn(),
   findTemplateVersion: jest.fn(),
-  createBatch: jest.fn()
+  createBatch: jest.fn(),
+  findBatch: jest.fn(),
+  findJob: jest.fn(),
+  updateJob: jest.fn(),
+  updateBatchStatus: jest.fn()
 }));
 
 const repository = require('../../src/modules/printing-core/printing.repository');
@@ -85,5 +89,27 @@ describe('printing core service', () => {
       sourceDocumentId: 1542,
       jobs: [{ targetId: 20, templateVersionId: 50 }]
     }, 7, 9)).rejects.toMatchObject({ code: 'PRINT_INCOMPATIBLE', statusCode: 409 });
+  });
+
+  test('retries a failed job and recalculates the batch as processing', async () => {
+    repository.findJob.mockResolvedValue({ id: 91, clinicId: 7, batchId: 70, status: 'FAILED' });
+    repository.findBatch.mockResolvedValue({ id: 70, jobs: [{ status: 'RETRYING' }] });
+
+    const result = await service.retryJob(91, 7);
+
+    expect(repository.updateJob).toHaveBeenCalledWith(91, 7, expect.objectContaining({
+      status: 'RETRYING',
+      attemptCount: { increment: 1 },
+      lastError: null
+    }));
+    expect(repository.updateBatchStatus).toHaveBeenCalledWith(70, 7, 'PROCESSING');
+    expect(result.status).toBe('PROCESSING');
+  });
+
+  test('rejects invalid job transitions', async () => {
+    repository.findJob.mockResolvedValue({ id: 91, clinicId: 7, batchId: 70, status: 'PRINTED' });
+
+    await expect(service.markJobFailed(91, 7, { error: 'paper jam' }))
+      .rejects.toMatchObject({ code: 'PRINT_INVALID_TRANSITION', statusCode: 409 });
   });
 });

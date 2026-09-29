@@ -71,6 +71,11 @@ const listBatches = (clinicId, take = 50) => prisma.printBatch.findMany({
   include: { jobs: true }
 });
 
+const findBatch = (id, clinicId) => prisma.printBatch.findFirst({ where: { id, clinicId }, include: { jobs: true } });
+const findJob = (id, clinicId) => prisma.printJob.findFirst({ where: { id, clinicId }, include: { batch: true } });
+const updateJob = (id, clinicId, data) => prisma.printJob.updateMany({ where: { id, clinicId }, data });
+const updateBatchStatus = (id, clinicId, status) => prisma.printBatch.updateMany({ where: { id, clinicId }, data: { status } });
+
 module.exports = {
   listLocations, createLocation, findLocation,
   listAgents, createAgent, findAgent,
@@ -80,5 +85,5 @@ module.exports = {
   listTemplates, createTemplate, createTemplateVersion,
   listAssets, createAsset,
   findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion,
-  createBatch, listBatches
+    createBatch, listBatches, findBatch, findJob, updateJob, updateBatchStatus
 };

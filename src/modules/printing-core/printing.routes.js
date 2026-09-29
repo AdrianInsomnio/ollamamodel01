@@ -3,6 +3,7 @@ const router = express.Router();
 const { authMiddleware, authorize } = require('../../core/middlewares');
 const { ROLES } = require('../../core/constants/roles');
 const { validate } = require('../../validation/validate.middleware');
+const idempotency = require('../../core/idempotency/idempotency.middleware');
 const controller = require('./printing.controller');
 const validation = require('./printing.validation');
 
@@ -25,6 +26,11 @@ router.post('/templates/versions', admins, validate(validation.createTemplateVer
 router.get('/assets', admins, controller.listAssets);
 router.post('/assets', admins, validate(validation.createAsset), controller.createAsset);
 router.get('/batches', controller.listBatches);
-router.post('/batches', validate(validation.createBatch), controller.createBatch);
+  router.post('/batches', idempotency('POST /api/printing/batches'), validate(validation.createBatch), controller.createBatch);
+  router.post('/jobs/:jobId/sent', controller.markJobSent);
+  router.post('/jobs/:jobId/printed', controller.markJobPrinted);
+  router.post('/jobs/:jobId/failed', validate(validation.jobFailure), controller.markJobFailed);
+  router.post('/jobs/:jobId/retry', controller.retryJob);
+  router.post('/jobs/:jobId/cancel', controller.cancelJob);
 
 module.exports = router;

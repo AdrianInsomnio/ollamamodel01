@@ -144,12 +144,53 @@ const createBatch = async (data, clinicId, requestedById) => {
   return repository.createBatch({ ...data, clinicId, requestedById, variant, jobs });
 };
 
-const listBatches = (clinicId, take) => repository.listBatches(clinicId, Math.min(Number(take) || 50, 100));
+  const listBatches = (clinicId, take) => repository.listBatches(clinicId, Math.min(Number(take) || 50, 100));
+
+  const JOB_TRANSITIONS = {
+    SENT: new Set(['PENDING', 'RETRYING']),
+    PRINTED: new Set(['SENT']),
+    FAILED: new Set(['PENDING', 'SENT', 'RETRYING']),
+    RETRYING: new Set(['FAILED']),
+    CANCELLED: new Set(['PENDING', 'FAILED', 'RETRYING'])
+  };
+
+  const recalculateBatch = async (batchId, clinicId) => {
+    const batch = await repository.findBatch(batchId, clinicId);
+    if (!batch) throw new AppError('PrintBatch no encontrado', 404, 'PRINT_BATCH_NOT_FOUND');
+    const statuses = batch.jobs.map((job) => job.status);
+    let status = 'PENDING';
+    if (statuses.length && statuses.every((value) => value === 'PRINTED')) status = 'COMPLETED';
+    else if (statuses.some((value) => value === 'PRINTED') && statuses.some((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'PARTIAL';
+    else if (statuses.length && statuses.every((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'FAILED';
+    else if (statuses.some((value) => ['SENT', 'RETRYING'].includes(value))) status = 'PROCESSING';
+    await repository.updateBatchStatus(batchId, clinicId, status);
+    return { ...batch, status };
+  };
+
+  const transitionJob = async (jobId, clinicId, nextStatus, details = {}) => {
+    const job = await repository.findJob(jobId, clinicId);
+    if (!job) throw new AppError('PrintJob no encontrado', 404, 'PRINT_JOB_NOT_FOUND');
+    if (job.status === nextStatus) return recalculateBatch(job.batchId, clinicId);
+    if (!JOB_TRANSITIONS[nextStatus]?.has(job.status)) throw new AppError(`No se puede cambiar PrintJob de ${job.status} a ${nextStatus}`, 409, 'PRINT_INVALID_TRANSITION');
+    const data = { status: nextStatus };
+    if (nextStatus === 'SENT') data.sentAt = new Date();
+    if (nextStatus === 'PRINTED') data.printedAt = new Date();
+    if (nextStatus === 'FAILED') data.lastError = String(details.error || 'Error de impresión').slice(0, 10000);
+    if (nextStatus === 'RETRYING') { data.attemptCount = { increment: 1 }; data.lastError = null; }
+    await repository.updateJob(jobId, clinicId, data);
+    return recalculateBatch(job.batchId, clinicId);
+  };
+
+  const markJobSent = (jobId, clinicId) => transitionJob(jobId, clinicId, 'SENT');
+  const markJobPrinted = (jobId, clinicId) => transitionJob(jobId, clinicId, 'PRINTED');
+  const markJobFailed = (jobId, clinicId, details) => transitionJob(jobId, clinicId, 'FAILED', details);
+  const retryJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'RETRYING');
+  const cancelJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'CANCELLED');
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
   createTemplate, createTemplateVersion, createAsset, createBatch, listBatches,
-  buildContract,
+    buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
   listAssets: repository.listAssets

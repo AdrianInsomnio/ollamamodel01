@@ -19,7 +19,8 @@ const wrap = (handler) => async (req, res, next) => {
 const create = (method) => wrap(async (req, res) => res.status(201).json(await service[method](req.body, clinicIdFromRequest(req))));
 const list = (method) => wrap(async (req, res) => res.json(await service[method](clinicIdFromRequest(req), req.query.take)));
 
-const createBatch = wrap(async (req, res) => res.status(201).json(await service.createBatch(req.body, clinicIdFromRequest(req), req.user.id)));
+  const createBatch = wrap(async (req, res) => res.status(201).json(await service.createBatch(req.body, clinicIdFromRequest(req), req.user.id)));
+  const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
 
 module.exports = {
   clinicIdFromRequest,
@@ -31,5 +32,7 @@ module.exports = {
   createTemplate: create('createTemplate'), listTemplates: list('listTemplates'),
   createTemplateVersion: create('createTemplateVersion'),
   createAsset: create('createAsset'), listAssets: list('listAssets'),
-  createBatch, listBatches: list('listBatches')
+    createBatch, listBatches: list('listBatches'),
+    markJobSent: jobAction('markJobSent'), markJobPrinted: jobAction('markJobPrinted'),
+    markJobFailed: jobAction('markJobFailed'), retryJob: jobAction('retryJob'), cancelJob: jobAction('cancelJob')
 };
