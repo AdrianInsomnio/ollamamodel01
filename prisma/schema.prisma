@@ -44,6 +44,15 @@ model Clinic {
   cashShifts             CashShift[]
   cashMovements          CashMovement[]
   ticketPrints           TicketPrint[]
+  printLocations         PrintLocation[]
+  printAgents            PrintAgent[]
+  printerProfiles        PrinterProfile[]
+  printers               Printer[]
+  printTargets           PrintTarget[]
+  printTemplates         PrintTemplate[]
+  printAssets            PrintAsset[]
+  printBatches           PrintBatch[]
+  printJobs              PrintJob[]
   cashAuditEvents        CashAuditEvent[]
   veterinarianActivities VeterinarianActivity[]
 
@@ -78,6 +87,7 @@ model User {
   cashMovements             CashMovement[]
   sales                     Sale[]
   ticketPrints              TicketPrint[]
+  printBatches              PrintBatch[]           @relation("PrintBatchRequester")
   cashAuditEvents           CashAuditEvent[]
   veterinarianConsultations Consultation[]         @relation("VeterinarianConsultations")
   veterinarianActivities    VeterinarianActivity[]
@@ -627,20 +637,20 @@ model Sale {
 }
 
 model SaleItem {
-  id            Int    @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   saleId        Int
   itemType      String
   itemId        Int
   nameSnapshot  String
   priceSnapshot Float
   unitPrice     Float?
-  ivaIncluded   Boolean  @default(false)
-  ivaRate       Float    @default(0)
-  netAmount     Float    @default(0)
-  taxAmount     Float    @default(0)
+  ivaIncluded   Boolean @default(false)
+  ivaRate       Float   @default(0)
+  netAmount     Float   @default(0)
+  taxAmount     Float   @default(0)
   quantity      Int
   subtotal      Float
-  sale          Sale   @relation(fields: [saleId], references: [id], map: "SaleItem_saleId_fkey")
+  sale          Sale    @relation(fields: [saleId], references: [id], map: "SaleItem_saleId_fkey")
 
   @@index([saleId], map: "SaleItem_saleId_fkey")
   @@map("sale_items")
@@ -876,6 +886,306 @@ model TicketPrint {
   @@index([cashShiftId])
   @@index([cashRegisterId])
   @@map("ticket_prints")
+}
+
+model PrintLocation {
+  id        Int      @id @default(autoincrement())
+  clinicId  Int
+  name      String
+  code      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic   Clinic        @relation(fields: [clinicId], references: [id])
+  printers Printer[]
+  agents   PrintAgent[]
+  targets  PrintTarget[]
+
+  @@unique([clinicId, code])
+  @@index([clinicId])
+  @@map("print_locations")
+}
+
+model PrintAgent {
+  id         Int              @id @default(autoincrement())
+  clinicId   Int
+  locationId Int?
+  name       String
+  endpoint   String?
+  apiKeyHash String?          @db.VarChar(255)
+  status     PrintAgentStatus @default(OFFLINE)
+  lastSeenAt DateTime?
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  clinic   Clinic         @relation(fields: [clinicId], references: [id])
+  location PrintLocation? @relation(fields: [locationId], references: [id])
+  printers Printer[]
+  jobs     PrintJob[]
+
+  @@index([clinicId])
+  @@index([locationId])
+  @@map("print_agents")
+}
+
+model PrinterProfile {
+  id           Int         @id @default(autoincrement())
+  clinicId     Int
+  name         String
+  printerType  PrinterType
+  paperTypes   Json
+  capabilities Json
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  clinic   Clinic    @relation(fields: [clinicId], references: [id])
+  printers Printer[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId])
+  @@map("printer_profiles")
+}
+
+model Printer {
+  id           Int              @id @default(autoincrement())
+  clinicId     Int
+  locationId   Int
+  printAgentId Int?
+  profileId    Int?
+  name         String
+  printerType  PrinterType
+  paperType    PrintPaperType
+  paperSize    PrintPaperSize
+  orientation  PrintOrientation @default(PORTRAIT)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  clinic     Clinic          @relation(fields: [clinicId], references: [id])
+  location   PrintLocation   @relation(fields: [locationId], references: [id])
+  printAgent PrintAgent?     @relation(fields: [printAgentId], references: [id])
+  profile    PrinterProfile? @relation(fields: [profileId], references: [id])
+  targets    PrintTarget[]
+  jobs       PrintJob[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId])
+  @@index([locationId])
+  @@index([printAgentId])
+  @@index([profileId])
+  @@map("printers")
+}
+
+model PrintTarget {
+  id         Int      @id @default(autoincrement())
+  clinicId   Int
+  locationId Int
+  printerId  Int?
+  code       String
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clinic   Clinic        @relation(fields: [clinicId], references: [id])
+  location PrintLocation @relation(fields: [locationId], references: [id])
+  printer  Printer?      @relation(fields: [printerId], references: [id])
+  jobs     PrintJob[]
+
+  @@unique([clinicId, code])
+  @@index([clinicId])
+  @@index([locationId])
+  @@index([printerId])
+  @@map("print_targets")
+}
+
+model PrintTemplate {
+  id           Int      @id @default(autoincrement())
+  clinicId     Int
+  templateKey  String
+  name         String
+  documentType String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clinic   Clinic                 @relation(fields: [clinicId], references: [id])
+  versions PrintTemplateVersion[]
+
+  @@unique([clinicId, templateKey])
+  @@index([clinicId])
+  @@map("print_templates")
+}
+
+model PrintTemplateVersion {
+  id          Int                        @id @default(autoincrement())
+  templateId  Int
+  version     Int
+  status      PrintTemplateVersionStatus @default(DRAFT)
+  paperType   PrintPaperType
+  paperSize   PrintPaperSize
+  orientation PrintOrientation           @default(PORTRAIT)
+  definition  Json
+  createdAt   DateTime                   @default(now())
+
+  template PrintTemplate @relation(fields: [templateId], references: [id])
+  jobs     PrintJob[]
+
+  @@unique([templateId, version])
+  @@index([templateId, status])
+  @@map("print_template_versions")
+}
+
+model PrintAsset {
+  id         Int      @id @default(autoincrement())
+  clinicId   Int
+  name       String
+  storageKey String
+  mimeType   String
+  width      Int?
+  height     Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@unique([clinicId, storageKey])
+  @@index([clinicId])
+  @@map("print_assets")
+}
+
+model PrintBatch {
+  id                 Int                  @id @default(autoincrement())
+  clinicId           Int
+  requestedById      Int?
+  originalBatchId    Int?
+  sourceDocumentType String
+  sourceDocumentId   String
+  variant            PrintDocumentVariant
+  status             PrintBatchStatus     @default(PENDING)
+  reason             String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  clinic        Clinic       @relation(fields: [clinicId], references: [id])
+  requestedBy   User?        @relation("PrintBatchRequester", fields: [requestedById], references: [id])
+  originalBatch PrintBatch?  @relation("PrintBatchReprints", fields: [originalBatchId], references: [id])
+  reprints      PrintBatch[] @relation("PrintBatchReprints")
+  jobs          PrintJob[]
+
+  @@index([clinicId, createdAt])
+  @@index([requestedById])
+  @@index([originalBatchId])
+  @@index([sourceDocumentType, sourceDocumentId])
+  @@map("print_batches")
+}
+
+model PrintJob {
+  id                Int                  @id @default(autoincrement())
+  clinicId          Int
+  batchId           Int
+  originalJobId     Int?
+  targetId          Int?
+  printerId         Int?
+  printAgentId      Int?
+  templateVersionId Int?
+  documentType      String
+  documentNumber    String?
+  variant           PrintDocumentVariant
+  status            PrintJobStatus       @default(PENDING)
+  contractVersion   Int                  @default(1)
+  contractSnapshot  Json
+  attemptCount      Int                  @default(0)
+  lastError         String?              @db.Text
+  sentAt            DateTime?
+  printedAt         DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  clinic          Clinic                @relation(fields: [clinicId], references: [id])
+  batch           PrintBatch            @relation(fields: [batchId], references: [id])
+  originalJob     PrintJob?             @relation("PrintJobReprints", fields: [originalJobId], references: [id])
+  reprints        PrintJob[]            @relation("PrintJobReprints")
+  target          PrintTarget?          @relation(fields: [targetId], references: [id])
+  printer         Printer?              @relation(fields: [printerId], references: [id])
+  printAgent      PrintAgent?           @relation(fields: [printAgentId], references: [id])
+  templateVersion PrintTemplateVersion? @relation(fields: [templateVersionId], references: [id])
+
+  @@index([clinicId, status])
+  @@index([batchId])
+  @@index([originalJobId])
+  @@index([targetId])
+  @@index([printerId])
+  @@index([printAgentId])
+  @@index([templateVersionId])
+  @@map("print_jobs")
+}
+
+enum PrintAgentStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+}
+
+enum PrinterType {
+  THERMAL
+  SHEET
+  OTHER
+}
+
+enum PrintPaperType {
+  THERMAL
+  SHEET
+}
+
+enum PrintPaperSize {
+  THERMAL_58
+  THERMAL_80
+  A4
+  LETTER
+  A5
+  LEGAL
+  CUSTOM
+}
+
+enum PrintOrientation {
+  PORTRAIT
+  LANDSCAPE
+}
+
+enum PrintTemplateVersionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PrintDocumentVariant {
+  ORIGINAL
+  DUPLICATE
+  COPY
+  PREVIEW
+}
+
+enum PrintBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum PrintJobStatus {
+  PENDING
+  SENT
+  PRINTED
+  FAILED
+  RETRYING
+  CANCELLED
 }
 
 enum TicketPrintType {
