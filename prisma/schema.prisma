@@ -51,9 +51,15 @@ model Clinic {
   printTargets           PrintTarget[]
   printTemplates         PrintTemplate[]
   printAssets            PrintAsset[]
+model Clinic {
+  id                   Int                  @id @default(autoincrement())
+// ... (rest of Clinic model remains same)
   printBatches           PrintBatch[]
   printJobs              PrintJob[]
+  printRules             PrintRule[]
   cashAuditEvents        CashAuditEvent[]
+// ...
+
   veterinarianActivities VeterinarianActivity[]
 
   subscriptionInstallments SubscriptionInstallment[]
@@ -979,28 +985,30 @@ model Printer {
   @@map("printers")
 }
 
-model PrintTarget {
-  id         Int      @id @default(autoincrement())
-  clinicId   Int
-  locationId Int
-  printerId  Int?
-  code       String
-  name       String
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model PrintRule {
+  id           Int      @id @default(autoincrement())
+  clinicId     Int
+  event        String   // Ej: 'SALE', 'PRESCRIPTION'
+  targetId     Int
+  templateKey  String
+  isActive     Boolean  @default(true)
+  priority     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  clinic   Clinic        @relation(fields: [clinicId], references: [id])
-  location PrintLocation @relation(fields: [locationId], references: [id])
-  printer  Printer?      @relation(fields: [printerId], references: [id])
-  jobs     PrintJob[]
+  clinic       Clinic       @relation(fields: [clinicId], references: [id])
+  target       PrintTarget @relation(fields: [targetId], references: [id])
 
-  @@unique([clinicId, code])
-  @@index([clinicId])
-  @@index([locationId])
-  @@index([printerId])
-  @@map("print_targets")
+  @@index([clinicId, event])
+  @@map("print_rules")
 }
+
+model PrintTarget {
+// ... (rest of PrintTarget model remains same)
+  jobs     PrintJob[]
+  rules    PrintRule[]
+// ...
+
 
 model PrintTemplate {
   id           Int      @id @default(autoincrement())

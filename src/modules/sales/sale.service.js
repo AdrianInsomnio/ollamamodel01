@@ -2,6 +2,7 @@ const repository = require('./sale.repository');
 const productRepository = require('../products/product.repository');
 const clientRepository = require('../clients/client.repository');
 const cashRegisterRepository = require('../cash/register/cashregister.repository');
+const printingService = require('../printing-core/printing.service');
 const { AppError } = require('../../core/errors/AppError');
 const { prisma } = require('../../lib/prisma');
 const { SALE_STATUS, isCancelledStatus, isConfirmedStatus, normalizeSaleStatus } = require('./sale.status');
@@ -431,11 +432,76 @@ const buildPrintData = (sale, print) => ({
 });
 
 const printSale = async (saleId, clinicId, userId, reason) => {
-  const result = await repository.createTicketPrintAtomic({ saleId, clinicId, userId, reason });
+  const sale = await getById(saleId, clinicId);
+  if (!sale) throw new AppError('Venta no encontrada', 404);
+
+  const variant = reason === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL';
+
+  // 1. Buscar reglas de impresión activas para el evento SALE
+  const rules = await printingService.findRulesByEvent(clinicId, 'SALE');
+  if (!rules || rules.length === 0) {
+    throw new AppError('No hay reglas de impresión configuradas para ventas', 404, 'PRINT_RULES_NOT_FOUND');
+  }
+
+  // 2. Preparar los jobs basados en las reglas encontradas
+  const jobs = rules.map(rule => {
+    // Intentamos resolver la versión activa del template especificado en la regla
+    // Nota: El printingService ya maneja la resolución interna si pasamos la key
+    return {
+      targetId: rule.targetId,
+      templateKey: rule.templateKey, // El backend ahora debe resolver esto a un ID de versión
+    };
+  });
+
+  // 3. Mapear datos de venta al formato del Print Contract v1
+  const batchData = {
+    sourceDocumentType: 'SALE',
+    sourceDocumentId: String(sale.id),
+    variant,
+    reason,
+    requestedById: userId,
+    customer: { 
+      name: sale.client?.name, 
+      phone: sale.client?.phone,
+      document: sale.client?.document 
+    },
+    totals: { 
+      subtotal: sale.subtotal, 
+      discount: sale.discount, 
+      tax: sale.tax, 
+      total: sale.total 
+    },
+    payments: sale.payments?.map(p => ({ 
+      method: p.method, 
+      amount: Number(p.amount) 
+    })) || [],
+    footer: { notes: sale.notes },
+    context: { 
+      petName: sale.pet?.name,
+      sellerName: sale.userId ? 'Vendedor' : 'Sistema' 
+    },
+    jobs: jobs.map(job => ({
+      targetId: job.targetId,
+      // Pasamos la key; el printingService.createBatch debe resolver la versión activa
+      templateKey: job.templateKey 
+    }))
+  };
+
+  // 4. Crear el Batch a través del Printing Core
+  const batch = await printingService.createBatch(batchData, clinicId, userId);
+  const mainJob = batch.jobs[0];
+
+  // 5. Retorno compatible con el frontend legacy
+  const legacyPrint = { 
+    id: mainJob.id, 
+    type: variant, 
+    reprintNumber: mainJob.attemptCount 
+  };
+  
   return {
-    print: result.print,
-    sale: result.sale,
-    printData: buildPrintData(result.sale, result.print),
+    print: legacyPrint,
+    sale: sale,
+    printData: buildPrintData(sale, legacyPrint),
   };
 };
 

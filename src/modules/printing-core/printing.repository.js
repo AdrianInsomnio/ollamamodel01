@@ -4,6 +4,12 @@ const listLocations = (clinicId) => prisma.printLocation.findMany({ where: { cli
 const createLocation = (data, clinicId) => prisma.printLocation.create({ data: { ...data, clinicId } });
 const findLocation = (id, clinicId) => prisma.printLocation.findFirst({ where: { id, clinicId, isActive: true } });
 
+const listRules = (clinicId) => prisma.printRule.findMany({ where: { clinicId }, orderBy: { priority: 'asc' } });
+const createRule = (data, clinicId) => prisma.printRule.create({ data: { ...data, clinicId } });
+const updateRule = (id, data, clinicId) => prisma.printRule.updateMany({ where: { id, clinicId }, data });
+const deleteRule = (id, clinicId) => prisma.printRule.deleteMany({ where: { id, clinicId } });
+const findRulesByEvent = (clinicId, event) => prisma.printRule.findMany({ where: { clinicId, event, isActive: true }, orderBy: { priority: 'asc' } });
+
 const listAgents = (clinicId) => prisma.printAgent.findMany({ where: { clinicId }, include: { location: true }, orderBy: { name: 'asc' } });
 const createAgent = (data, clinicId) => prisma.printAgent.create({ data: { ...data, clinicId } });
 const findAgent = (id, clinicId) => prisma.printAgent.findFirst({ where: { id, clinicId, isActive: true } });
@@ -73,7 +79,12 @@ const createBatch = (data) => prisma.printBatch.create({
 });
 
 const listBatches = (clinicId, take = 50, filters = {}) => prisma.printBatch.findMany({
-  where: { clinicId, ...(filters.status ? { status: filters.status } : {}), ...(filters.sourceDocumentType ? { sourceDocumentType: filters.sourceDocumentType } : {}) },
+  where: { 
+    clinicId, 
+    ...(filters.status ? { status: filters.status } : {}), 
+    ...(filters.sourceDocumentType ? { sourceDocumentType: filters.sourceDocumentType } : {}),
+    ...(filters.createdAt ? { createdAt: filters.createdAt } : {})
+  },
   take,
   orderBy: { createdAt: 'desc' },
   include: { jobs: true }

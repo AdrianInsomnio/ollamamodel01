@@ -17,7 +17,7 @@ const wrap = (handler) => async (req, res, next) => {
 };
 
 const create = (method) => wrap(async (req, res) => res.status(201).json(await service[method](req.body, clinicIdFromRequest(req))));
-  const list = (method) => wrap(async (req, res) => res.json(await service[method](clinicIdFromRequest(req), req.query.take, req.query)));
+const list = (method) => wrap(async (req, res) => res.json(await service[method](clinicIdFromRequest(req), req.query)));
 
   const createBatch = wrap(async (req, res) => res.status(201).json(await service.createBatch(req.body, clinicIdFromRequest(req), req.user.id)));
   const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
