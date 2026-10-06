@@ -1,4 +1,5 @@
 const repository = require('./printing.repository');
+const axios = require('axios');
 const { AppError } = require('../../core/errors/AppError');
 
 const PAPER_TYPES = new Set(['THERMAL', 'SHEET']);
@@ -20,7 +21,12 @@ const assertPaper = (paperType, paperSize) => {
 
 const createLocation = async (data, clinicId) => {
   requireName(data.name, 'name');
-  return repository.createLocation({ name: data.name.trim(), code: data.code || null }, clinicId);
+  try {
+    return await repository.createLocation({ name: data.name.trim(), code: data.code || null }, clinicId);
+  } catch (error) {
+    if (error.code === 'P2002') throw new AppError(`Ya existe una ubicación con el código "${data.code}" para esta clínica`, 409, 'LOCATION_CODE_DUPLICATED');
+    throw error;
+  }
 };
 
 const createAgent = async (data, clinicId) => {
@@ -51,6 +57,7 @@ const createPrinter = async (data, clinicId) => {
   return repository.createPrinter({
     name: data.name.trim(), locationId: data.locationId, printAgentId: data.printAgentId || null,
     profileId: data.profileId || null, printerType: data.printerType, paperType: data.paperType,
+   // paperSize: data.//Fixed typo
     paperSize: data.paperSize, orientation: data.orientation || 'PORTRAIT'
   }, clinicId);
 };
@@ -72,7 +79,12 @@ const createTemplate = async (data, clinicId) => {
   requireName(data.templateKey, 'templateKey');
   requireName(data.name, 'name');
   requireName(data.documentType, 'documentType');
-  return repository.createTemplate({ templateKey: data.templateKey.trim(), name: data.name.trim(), documentType: data.documentType.trim() }, clinicId);
+  try {
+    return await repository.createTemplate({ templateKey: data.templateKey.trim(), name: data.name.trim(), documentType: data.documentType.trim() }, clinicId);
+  } catch (error) {
+    if (error.code === 'P2002') throw new AppError(`Ya existe un template con la clave "${data.templateKey}" para esta clínica`, 409, 'TEMPLATE_KEY_DUPLICATED');
+    throw error;
+  }
 };
 
 const createTemplateVersion = async (data, clinicId) => {
@@ -116,7 +128,51 @@ const buildContract = ({ clinic, sourceDocumentType, sourceDocumentId, variant, 
   context: data.context || {}
 });
 
+const createBatchFromRules = async (event, data, clinicId, requestedById) => {
+  const rules = await repository.findRulesByEvent(clinicId, event);
+  if (!rules.length) return null;
+
+  const jobs = [];
+  for (const rule of rules) {
+    const target = await repository.findTarget(rule.targetId, clinicId);
+    if (!target || !target.printer) continue;
+
+    const printer = target.printer;
+    const template = await repository.findTemplate(rule.templateKey, clinicId);
+    if (!template) continue;
+
+    const activeVersion = template.versions?.[0]; // Simplificación: usa la última
+    if (!activeVersion) continue;
+
+    // Validar compatibilidad básica
+    if (activeVersion.paperType !== printer.paperType || activeVersion.paperSize !== printer.paperSize) {
+      console.warn(`Regla de impresión incompatible: Target ${target.name} vs Template ${template.name}`);
+      continue;
+    }
+
+    jobs.push({
+      targetId: target.id,
+      printerId: printer.id,
+      printAgentId: printer.printAgentId || null,
+      templateVersionId: activeVersion.id,
+      documentType: event,
+      variant: 'ORIGINAL',
+      contractSnapshot: { /* Se resolverá en el createBatch real */ }
+    });
+  }
+
+  if (!jobs.length) return null;
+
+  return repository.createBatch({ 
+    sourceDocumentType: event, 
+    sourceDocumentId: data.id || 'N/A', 
+    variant: 'ORIGINAL', 
+    jobs 
+  }, clinicId, requestedById);
+};
+
 const createBatch = async (data, clinicId, requestedById) => {
+// ... (rest of function remains same)
   requireName(data.sourceDocumentType, 'sourceDocumentType');
   requireDocumentId(data.sourceDocumentId);
   if (!Array.isArray(data.jobs) || data.jobs.length === 0) throw new AppError('Debe existir al menos un PrintJob', 400, 'PRINT_JOBS_REQUIRED');
@@ -144,93 +200,139 @@ const createBatch = async (data, clinicId, requestedById) => {
   return repository.createBatch({ ...data, clinicId, requestedById, variant, jobs });
 };
 
-  const listBatches = (clinicId, take, filters = {}) => repository.listBatches(clinicId, Math.min(Number(take) || 50, 100), filters);
+const listBatches = async (clinicId, take, filters = {}) => {
+  const sanitizedFilters = {};
+  if (filters.status) sanitizedFilters.status = filters.status;
+  if (filters.sourceDocumentType) sanitizedFilters.sourceDocumentType = filters.sourceDocumentType;
+  if (filters.startDate || filters.endDate) {
+    sanitizedFilters.createdAt = {};
+    if (filters.startDate) sanitizedFilters.createdAt.gte = new Date(filters.startDate);
+    if (filters.endDate) sanitizedFilters.createdAt.lte = new Date(filters.endDate);
+  }
+  return repository.listBatches(clinicId, Math.min(Number(take) || 50, 100), sanitizedFilters);
+};
 
-  const activateTemplateVersion = async (versionId, clinicId) => {
-    const version = await repository.activateTemplateVersion(Number(versionId), clinicId);
-    if (!version) throw new AppError('TemplateVersion no encontrada o no autorizada', 404, 'PRINT_TEMPLATE_VERSION_NOT_FOUND');
-    return version;
-  };
+const activateTemplateVersion = async (versionId, clinicId) => {
+  const version = await repository.activateTemplateVersion(Number(versionId), clinicId);
+  if (!version) throw new AppError('TemplateVersion no encontrada o no autorizada', 404, 'PRINT_TEMPLATE_VERSION_NOT_FOUND');
+  return version;
+};
 
-  const RESOURCE_MODELS = Object.freeze({
-    locations: 'printLocation', agents: 'printAgent', profiles: 'printerProfile',
-    printers: 'printer', targets: 'printTarget', templates: 'printTemplate', assets: 'printAsset'
-  });
+const RESOURCE_MODELS = Object.freeze({
+  locations: 'printLocation', agents: 'printAgent', profiles: 'printerProfile',
+  printers: 'printer', targets: 'printTarget', templates: 'printTemplate', assets: 'printAsset'
+});
 
-  const deactivateResource = async (resource, id, clinicId) => {
-    const model = RESOURCE_MODELS[resource];
-    if (!model) throw new AppError('Recurso de impresión no soportado', 400, 'PRINT_RESOURCE_INVALID');
-    const result = await repository.deactivateResource(model, Number(id), clinicId);
-    if (!result.count) throw new AppError('Recurso no encontrado o ya inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
-    return { id: Number(id), resource, isActive: false };
-  };
+const deactivateResource = async (resource, id, clinicId) => {
+  const model = RESOURCE_MODELS[resource];
+  if (!model) throw new AppError('Recurso de impresi��n no soportado', 400, 'PRINT_RESOURCE_INVALID');
+  const result = await repository.deactivateResource(model, Number(id), clinicId);
+  if (!result.count) throw new AppError('Recurso no encontrado o ya inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
+  return { id: Number(id), resource, isActive: false };
+};
 
-  const UPDATE_FIELDS = Object.freeze({
-    locations: { model: 'printLocation', fields: ['name', 'code'] },
-    agents: { model: 'printAgent', fields: ['name', 'endpoint', 'status'] },
-    profiles: { model: 'printerProfile', fields: ['name', 'paperTypes', 'capabilities'] },
-    printers: { model: 'printer', fields: ['name', 'orientation'] },
-    targets: { model: 'printTarget', fields: ['name'] },
-    templates: { model: 'printTemplate', fields: ['name', 'documentType'] },
-    assets: { model: 'printAsset', fields: ['name', 'storageKey', 'mimeType', 'width', 'height'] }
-  });
+const UPDATE_FIELDS = Object.freeze({
+  locations: { model: 'printLocation', fields: ['name', 'code'] },
+  agents: { model: 'printAgent', fields: ['name', 'endpoint', 'status'] },
+  profiles: { model: 'printerProfile', fields: ['name', 'paperTypes', 'capabilities'] },
+  printers: { model: 'printer', fields: ['name', 'orientation'] },
+  targets: { model: 'printTarget', fields: ['name'] },
+  templates: { model: 'printTemplate', fields: ['name', 'documentType'] },
+  assets: { model: 'printAsset', fields: ['name', 'storageKey', 'mimeType', 'width', 'height'] }
+});
 
-  const updateResource = async (resource, id, data, clinicId) => {
-    const definition = UPDATE_FIELDS[resource];
-    if (!definition) throw new AppError('Recurso de impresión no soportado', 400, 'PRINT_RESOURCE_INVALID');
-    const update = Object.fromEntries(Object.entries(data || {}).filter(([key, value]) => definition.fields.includes(key) && value !== undefined));
-    if (!Object.keys(update).length) throw new AppError('No hay campos editables para actualizar', 400, 'PRINT_UPDATE_EMPTY');
-    if ('name' in update) requireName(update.name, 'name');
-    const result = await repository.updateResource(definition.model, Number(id), clinicId, update);
-    if (!result.count) throw new AppError('Recurso no encontrado o inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
-    return { id: Number(id), resource, updated: Object.keys(update) };
-  };
+const updateResource = async (resource, id, data, clinicId) => {
+  const definition = UPDATE_FIELDS[resource];
+  if (!definition) throw new AppError('Recurso de impresi��n no soportado', 400, 'PRINT_RESOURCE_INVALID');
+  const update = Object.fromEntries(Object.entries(data || {}).filter(([key, value]) => definition.fields.includes(key) && value !== undefined));
+  if (!Object.keys(update).length) throw new AppError('No hay campos editables para actualizar', 400, 'PRINT_UPDATE_EMPTY');
+  if ('name' in update) requireName(update.name, 'name');
+  const result = await repository.updateResource(definition.model, Number(id), clinicId, update);
+  if (!result.count) throw new AppError('Recurso no encontrado o inactivo', 404, 'PRINT_RESOURCE_NOT_FOUND');
+  return { id: Number(id), resource, updated: Object.keys(update) };
+};
 
-  const JOB_TRANSITIONS = {
-    SENT: new Set(['PENDING', 'RETRYING']),
-    PRINTED: new Set(['SENT']),
-    FAILED: new Set(['PENDING', 'SENT', 'RETRYING']),
-    RETRYING: new Set(['FAILED']),
-    CANCELLED: new Set(['PENDING', 'FAILED', 'RETRYING'])
-  };
+const JOB_TRANSITIONS = {
+  SENT: new Set(['PENDING', 'RETRYING']),
+  PRINTED: new Set(['SENT']),
+  FAILED: new Set(['PENDING', 'SENT', 'RETRYING']),
+  RETRYING: new Set(['FAILED']),
+  CANCELLED: new Set(['PENDING', 'FAILED', 'RETRYING'])
+};
 
-  const recalculateBatch = async (batchId, clinicId) => {
-    const batch = await repository.findBatch(batchId, clinicId);
-    if (!batch) throw new AppError('PrintBatch no encontrado', 404, 'PRINT_BATCH_NOT_FOUND');
-    const statuses = batch.jobs.map((job) => job.status);
-    let status = 'PENDING';
-    if (statuses.length && statuses.every((value) => value === 'PRINTED')) status = 'COMPLETED';
-    else if (statuses.some((value) => value === 'PRINTED') && statuses.some((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'PARTIAL';
-    else if (statuses.length && statuses.every((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'FAILED';
-    else if (statuses.some((value) => ['SENT', 'RETRYING'].includes(value))) status = 'PROCESSING';
-    await repository.updateBatchStatus(batchId, clinicId, status);
-    return { ...batch, status };
-  };
+const recalculateBatch = async (batchId, clinicId) => {
+  const batch = await repository.findBatch(batchId, clinicId);
+  if (!batch) throw new AppError('PrintBatch no encontrado', 404, 'PRINT_BATCH_NOT_FOUND');
+  const statuses = batch.jobs.map((job) => job.status);
+  let status = 'PENDING';
+  if (statuses.length && statuses.every((value) => value === 'PRINTED')) status = 'COMPLETED';
+  else if (statuses.some((value) => value === 'PRINTED') && statuses.some((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'PARTIAL';
+  else if (statuses.length && statuses.every((value) => ['FAILED', 'CANCELLED'].includes(value))) status = 'FAILED';
+  else if (statuses.some((value) => ['SENT', 'RETRYING'].includes(value))) status = 'PROCESSING';
+  await repository.updateBatchStatus(batchId, clinicId, status);
+  return { ...batch, status };
+};
 
-  const transitionJob = async (jobId, clinicId, nextStatus, details = {}) => {
-    const job = await repository.findJob(jobId, clinicId);
-    if (!job) throw new AppError('PrintJob no encontrado', 404, 'PRINT_JOB_NOT_FOUND');
-    if (job.status === nextStatus) return recalculateBatch(job.batchId, clinicId);
-    if (!JOB_TRANSITIONS[nextStatus]?.has(job.status)) throw new AppError(`No se puede cambiar PrintJob de ${job.status} a ${nextStatus}`, 409, 'PRINT_INVALID_TRANSITION');
-    const data = { status: nextStatus };
-    if (nextStatus === 'SENT') data.sentAt = new Date();
-    if (nextStatus === 'PRINTED') data.printedAt = new Date();
-    if (nextStatus === 'FAILED') data.lastError = String(details.error || 'Error de impresión').slice(0, 10000);
-    if (nextStatus === 'RETRYING') { data.attemptCount = { increment: 1 }; data.lastError = null; }
-    await repository.updateJob(jobId, clinicId, data);
-    return recalculateBatch(job.batchId, clinicId);
-  };
+const transitionJob = async (jobId, clinicId, nextStatus, details = {}) => {
+  const job = await repository.findJob(jobId, clinicId);
+  if (!job) throw new AppError('PrintJob no encontrado', 404, 'PRINT_JOB_NOT_FOUND');
+  if (job.status === nextStatus) return recalculateBatch(job.batchId, clinicId);
+  if (!JOB_TRANSITIONS[nextStatus]?.has(job.status)) throw new AppError(`No se puede cambiar PrintJob de ${job.status} a ${nextStatus}`, 409, 'PRINT_INVALID_TRANSITION');
+  const data = { status: nextStatus };
+  if (nextStatus === 'SENT') data.sentAt = new Date();
+  if (nextStatus === 'PRINTED') data.printedAt = new Date();
+  if (nextStatus === 'FAILED') data.lastError = String(details.error || 'Error de impresi��n').slice(0, 10000);
+  if (nextStatus === 'RETRYING') { data.attemptCount = { increment: 1 }; data.lastError = null; }
+  await repository.updateJob(jobId, clinicId, data);
+  return recalculateBatch(job.batchId, clinicId);
+};
 
-  const markJobSent = (jobId, clinicId) => transitionJob(jobId, clinicId, 'SENT');
-  const markJobPrinted = (jobId, clinicId) => transitionJob(jobId, clinicId, 'PRINTED');
-  const markJobFailed = (jobId, clinicId, details) => transitionJob(jobId, clinicId, 'FAILED', details);
-  const retryJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'RETRYING');
-  const cancelJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'CANCELLED');
+const sendJobToAgent = async (jobId, clinicId) => {
+  const job = await repository.findJob(jobId, clinicId);
+  if (!job) throw new AppError('PrintJob no encontrado', 404, 'PRINT_JOB_NOT_FOUND');
+  if (job.status !== 'PENDING' && job.status !== 'RETRYING') {
+    throw new AppError(`El job ${jobId} no está en estado apto para envío (${job.status})`, 400, 'PRINT_INVALID_STATUS');
+  }
+
+  const printer = await repository.findPrinter(job.printerId, clinicId);
+  if (!printer || !printer.printAgentId) throw new AppError('Impresora sin agente configurado', 409, 'PRINT_AGENT_MISSING');
+
+  const agent = await repository.findAgent(printer.printAgentId, clinicId);
+  if (!agent || agent.status !== 'ONLINE' || !agent.endpoint) {
+    throw new AppError('El agente de impresión está offline o no tiene endpoint válido', 409, 'PRINT_AGENT_OFFLINE');
+  }
+
+  try {
+    const response = await axios.post(`${agent.endpoint}/api/print/document`, job.contractSnapshot, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-api-key': agent.apiKey 
+      },
+      timeout: 10000
+    });
+
+    if (response.status === 200 || response.status === 202) {
+      return await markJobSent(jobId, clinicId);
+    } else {
+      throw new Error(`Agent responded with status ${response.status}`);
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || error.message || 'Error desconocido al conectar con Agent';
+    await markJobFailed(jobId, clinicId, { error: errorMessage });
+    throw new AppError(`Error enviando al agente: ${errorMessage}`, 502, 'PRINT_AGENT_ERROR');
+  }
+};
+
+const markJobSent = (jobId, clinicId) => transitionJob(jobId, clinicId, 'SENT');
+const markJobPrinted = (jobId, clinicId) => transitionJob(jobId, clinicId, 'PRINTED');
+const markJobFailed = (jobId, clinicId, details) => transitionJob(jobId, clinicId, 'FAILED', details);
+const retryJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'RETRYING');
+const cancelJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'CANCELLED');
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
   createTemplate, createTemplateVersion, activateTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
-    buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob,
+  buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob, sendJobToAgent,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
   listAssets: repository.listAssets
