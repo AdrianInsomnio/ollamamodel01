@@ -39,6 +39,9 @@ const listTemplates = (clinicId) => prisma.printTemplate.findMany({
 });
 const createTemplate = (data, clinicId) => prisma.printTemplate.create({ data: { ...data, clinicId } });
 const createTemplateVersion = (data) => prisma.printTemplateVersion.create({ data });
+const deleteDraftTemplateVersion = (id, clinicId) => prisma.printTemplateVersion.deleteMany({
+  where: { id, status: 'DRAFT', template: { clinicId, isActive: true } }
+});
 const activateTemplateVersion = async (id, clinicId) => {
   const version = await findTemplateVersion(id, clinicId);
   if (!version) return null;
@@ -103,7 +106,7 @@ module.exports = {
   listProfiles, createProfile, findProfile,
   listPrinters, createPrinter,
   listTargets, createTarget,
-  listTemplates, createTemplate,
+  listTemplates, createTemplate, createTemplateVersion, deleteDraftTemplateVersion,
   listAssets, createAsset,
   findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion,
   createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus, deactivateResource, updateResource

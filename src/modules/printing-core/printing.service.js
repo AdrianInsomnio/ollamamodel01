@@ -128,6 +128,18 @@ const buildContract = ({ clinic, sourceDocumentType, sourceDocumentId, variant, 
   context: data.context || {}
 });
 
+const listRules = async (clinicId) => {
+  try {
+    return await repository.listRules(clinicId);
+  } catch (error) {
+    return [];
+  }
+};
+
+const createRule = async (data, clinicId) => {
+  return repository.createRule(data, clinicId);
+};
+
 const createBatchFromRules = async (event, data, clinicId, requestedById) => {
   const rules = await repository.findRulesByEvent(clinicId, event);
   if (!rules.length) return null;
@@ -216,6 +228,22 @@ const activateTemplateVersion = async (versionId, clinicId) => {
   const version = await repository.activateTemplateVersion(Number(versionId), clinicId);
   if (!version) throw new AppError('TemplateVersion no encontrada o no autorizada', 404, 'PRINT_TEMPLATE_VERSION_NOT_FOUND');
   return version;
+};
+
+const deleteDraftTemplateVersion = async (versionId, clinicId) => {
+  const id = Number(versionId);
+  if (!Number.isInteger(id) || id <= 0) throw new AppError('versionId no válido', 400, 'VALIDATION_ERROR');
+  const version = await repository.findTemplateVersion(id, clinicId);
+  if (!version) throw new AppError('TemplateVersion no encontrada o no autorizada', 404, 'PRINT_TEMPLATE_VERSION_NOT_FOUND');
+  if (version.status !== 'DRAFT') throw new AppError('Solo se pueden eliminar versiones DRAFT', 409, 'PRINT_TEMPLATE_VERSION_NOT_DRAFT');
+  try {
+    const result = await repository.deleteDraftTemplateVersion(id, clinicId);
+    if (!result.count) throw new AppError('La versión ya no es un borrador disponible', 409, 'PRINT_TEMPLATE_VERSION_NOT_DRAFT');
+  } catch (error) {
+    if (error.code === 'P2003') throw new AppError('No se puede eliminar una versión vinculada a trabajos de impresión', 409, 'PRINT_TEMPLATE_VERSION_IN_USE');
+    throw error;
+  }
+  return { id, status: 'DELETED' };
 };
 
 const RESOURCE_MODELS = Object.freeze({
@@ -326,13 +354,25 @@ const sendJobToAgent = async (jobId, clinicId) => {
 const markJobSent = (jobId, clinicId) => transitionJob(jobId, clinicId, 'SENT');
 const markJobPrinted = (jobId, clinicId) => transitionJob(jobId, clinicId, 'PRINTED');
 const markJobFailed = (jobId, clinicId, details) => transitionJob(jobId, clinicId, 'FAILED', details);
-const retryJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'RETRYING');
+const retryJob = async (jobId, clinicId) => {
+  // 1. Cambiar estado a RETRYING (actualiza attemptCount y limpia error)
+  await transitionJob(jobId, clinicId, 'RETRYING');
+  
+  // 2. Intentar el envío real al agente inmediatamente
+  try {
+    return await sendJobToAgent(jobId, clinicId);
+  } catch (error) {
+    // El error ya es manejado por sendJobToAgent que llama a markJobFailed
+    throw error;
+  }
+};
 const cancelJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'CANCELLED');
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
-  createTemplate, createTemplateVersion, activateTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
+  createTemplate, createTemplateVersion, activateTemplateVersion, deleteDraftTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
   buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob, sendJobToAgent,
+  listRules, createRule,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
   listAssets: repository.listAssets
