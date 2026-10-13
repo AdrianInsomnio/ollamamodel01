@@ -401,6 +401,22 @@ const cancelSaleLegacy = async (id, clinicId) => {
   return { message: 'Venta cancelada exitosamente' };
 };
 
+const buildTaxBreakdown = (sale) => {
+  const subtotal = Number(sale.subtotal) || 0;
+  const discountRatio = subtotal > 0 ? Math.max(0, 1 - (Number(sale.discount) || 0) / subtotal) : 1;
+  const taxByRate = new Map();
+  for (const item of sale.saleItems || []) {
+    const taxAmount = Number(item.taxAmount) || 0;
+    if (taxAmount <= 0) continue;
+    const rate = Number(item.ivaRate) || 0;
+    taxByRate.set(rate, (taxByRate.get(rate) || 0) + taxAmount * discountRatio);
+  }
+  return [...taxByRate.entries()]
+    .sort(([rateA], [rateB]) => rateA - rateB)
+    .map(([rate, amount]) => `IVA${rate > 0 ? ` ${rate}%` : ''}: $ ${amount.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    .join('\n');
+};
+
 const buildPrintData = (sale, print) => ({
   type: print.type === 'DUPLICATE' ? 'TICKET DUPLICADO' : 'TICKET ORIGINAL',
   printType: print.type,
@@ -422,7 +438,9 @@ const buildPrintData = (sale, print) => ({
   })),
   subtotal: sale.subtotal,
   discount: sale.discount,
+  discountPercent: Number(sale.subtotal) > 0 ? (Number(sale.discount || 0) / Number(sale.subtotal)) * 100 : 0,
   tax: sale.tax,
+  taxBreakdown: buildTaxBreakdown(sale),
   total: sale.total,
   taxRate: sale.saleItems.some((item) => Number(item.ivaRate) > 0) ? Math.max(...sale.saleItems.map((item) => Number(item.ivaRate))) : 0,
   payments: sale.payments.filter((payment) => Number(payment.amount) > 0).map((payment) => ({
@@ -468,7 +486,9 @@ const printSale = async (saleId, clinicId, userId, reason) => {
     totals: { 
       subtotal: sale.subtotal, 
       discount: sale.discount, 
+      discountPercent: Number(sale.subtotal) > 0 ? (Number(sale.discount || 0) / Number(sale.subtotal)) * 100 : 0,
       tax: sale.tax, 
+      taxBreakdown: buildTaxBreakdown(sale),
       total: sale.total 
     },
     payments: sale.payments?.map(p => ({ 
