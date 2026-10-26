@@ -60,6 +60,7 @@ const create = async (data, clinicId, role = 'ADMIN', userId = null) => {
 
   if (normalizedData.categoryId !== undefined && normalizedData.categoryId !== null) {
     const category = await repository.findCategory(normalizedData.categoryId, clinicId);
+    if (category && !['PRODUCTO', 'FARMACIA'].includes(category.type)) throw new AppError('La categoría seleccionada no corresponde a un producto', 400, 'CATEGORY_TYPE_MISMATCH');
     if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
   }
 
@@ -127,8 +128,9 @@ const update = async (id, clinicId, data) => {
     throw new AppError('La configuración de IVA debe ser booleana', 400, 'INVALID_IVA_INCLUDED');
   }
 
-  if (data.categoryId !== undefined && data.categoryId !== null) {
+  if (data.categoryId !== undefined && data.categoryId !== null && data.categoryId !== product.categoryId) {
     const category = await repository.findCategory(data.categoryId, clinicId);
+    if (category && !['PRODUCTO', 'FARMACIA'].includes(category.type)) throw new AppError('La categoría seleccionada no corresponde a un producto', 400, 'CATEGORY_TYPE_MISMATCH');
     if (!category) throw new AppError('Categoría no encontrada para la clínica activa', 400);
   }
 

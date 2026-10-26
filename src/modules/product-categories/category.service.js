@@ -1,17 +1,27 @@
 const repository = require('./category.repository');
 const { AppError } = require('../../core/errors/AppError');
 
+const CATEGORY_TYPES = ['PRODUCTO', 'SERVICIO', 'FARMACIA'];
+const validateCategoryType = (type) => {
+  if (!CATEGORY_TYPES.includes(type)) {
+    throw new AppError(`El tipo de categoría debe ser uno de: ${CATEGORY_TYPES.join(', ')}`, 400, 'INVALID_CATEGORY_TYPE');
+  }
+};
+
 const getAll = (clinicId) => repository.findAll(clinicId);
 
 const create = async (data, clinicId) => {
   if (!data.name || !data.name.trim()) throw new AppError('El nombre de la categoría es obligatorio', 400);
-  return repository.create({ ...data, name: data.name.trim().toUpperCase() }, clinicId);
+  const type = data.type ?? 'PRODUCTO';
+  validateCategoryType(type);
+  return repository.create({ ...data, type, name: data.name.trim().toUpperCase() }, clinicId);
 };
 
 const update = async (id, clinicId, data) => {
   const category = await repository.findById(id, clinicId);
   if (!category) throw new AppError('Categoría no encontrada', 404);
   if (data.name !== undefined && !data.name.trim()) throw new AppError('El nombre de la categoría es obligatorio', 400);
+  if (data.type !== undefined) validateCategoryType(data.type);
   return repository.update(id, clinicId, data);
 };
 
@@ -39,4 +49,4 @@ const updateSubcategory = async (id, categoryId, clinicId, data) => {
 
 const updateSubcategoryStatus = (id, categoryId, clinicId, isActive) => updateSubcategory(id, categoryId, clinicId, { isActive });
 
-module.exports = { getAll, create, update, updateStatus, getSubcategories, createSubcategory, updateSubcategory, updateSubcategoryStatus };
+module.exports = { getAll, create, update, updateStatus, getSubcategories, createSubcategory, updateSubcategory, updateSubcategoryStatus, CATEGORY_TYPES };
