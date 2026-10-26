@@ -1,18 +1,29 @@
 const { prisma } = require('../../lib/prisma');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, clinicId) => {
-  return await prisma.product.create({
-    data: {
-      ...data,
-      clinicId
-    },
-    include: {
-      category: true,
-      subcategory: true,
-    }
+const create = async (data, clinicId, userId = null) => prisma.$transaction(async (tx) => {
+  const product = await tx.product.create({
+    data: { ...data, clinicId },
+    include: { category: true, subcategory: true, supplierRecord: true },
   });
-};
+
+  if (product.stock > 0) {
+    await tx.stockMovement.create({
+      data: {
+        productId: product.id,
+        clinicId,
+        userId,
+        type: 'in',
+        quantity: product.stock,
+        reason: 'Stock inicial',
+        referenceType: 'product',
+        referenceId: product.id,
+      },
+    });
+  }
+
+  return product;
+});
 
 const findAll = async (clinicId, options = {}) => {
   const { includeDiscontinued = false, categoryId } = options;
@@ -32,6 +43,7 @@ const findAll = async (clinicId, options = {}) => {
     include: {
       category: true,
       subcategory: true,
+      supplierRecord: true,
     },
     orderBy: { name: 'asc' }
   });
@@ -42,6 +54,7 @@ const findById = async (id, clinicId) => {
     where: { id, clinicId },
     include: {
       category: true,
+      supplierRecord: true,
       stockMovements: {
         orderBy: { createdAt: 'desc' },
         take: 10
@@ -69,6 +82,11 @@ const findSubcategory = async (subcategoryId, categoryId, clinicId) => prisma.pr
   select: { id: true },
 });
 
+const findActiveSupplier = async (supplierId, clinicId) => prisma.supplier.findFirst({
+  where: { id: Number(supplierId), clinicId, isActive: true },
+  select: { id: true },
+});
+
 const update = async (id, clinicId, data) => {
   return await prisma.product.update({
     where: { id, clinicId },
@@ -76,6 +94,7 @@ const update = async (id, clinicId, data) => {
     include: {
       category: true,
       subcategory: true,
+      supplierRecord: true,
     }
   });
 };
@@ -180,6 +199,7 @@ module.exports = {
   findByIds,
   findCategory,
   findSubcategory,
+  findActiveSupplier,
   update,
   remove,
   updateStock,

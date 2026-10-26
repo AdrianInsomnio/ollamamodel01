@@ -96,10 +96,41 @@ describe('Product Service', () => {
     }, organizationId);
   });
 
+  it('no permite a USER asignar proveedor ni datos farmacéuticos', async () => {
+    productRepository.create.mockResolvedValue(mockProduct);
+
+    await productService.create({
+      name: mockProduct.name,
+      price: 0,
+      supplierId: 15,
+      activeIngredient: 'Principio activo',
+      requiresPrescription: true,
+    }, organizationId, 'USER');
+
+    expect(productRepository.create).toHaveBeenCalledWith(expect.not.objectContaining({
+      supplierId: 15,
+      activeIngredient: 'Principio activo',
+      requiresPrescription: true,
+    }), organizationId);
+  });
+
   it('rechaza a USER cuando intenta crear un producto de precio fijo', async () => {
     await expect(productService.create({ name: mockProduct.name, price: 100 }, organizationId, 'USER'))
       .rejects
       .toMatchObject({ statusCode: 403, code: 'VARIABLE_PRODUCT_ONLY' });
+  });
+
+  it('rechaza asignar un proveedor inactivo o ajeno a la clínica', async () => {
+    productRepository.findActiveSupplier.mockResolvedValue(null);
+
+    await expect(productService.create({
+      name: mockProduct.name,
+      price: 100,
+      supplierId: 15,
+    }, organizationId, 'ADMIN'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'SUPPLIER_NOT_AVAILABLE' });
+
+    expect(productRepository.create).not.toHaveBeenCalled();
   });
 
   it('rechaza una subcategoría que no pertenece a la categoría y clínica activas', async () => {

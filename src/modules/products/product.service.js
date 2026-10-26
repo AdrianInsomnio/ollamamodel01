@@ -1,7 +1,7 @@
 const repository = require('./product.repository');
 const { AppError } = require('../../core/errors/AppError');
 
-const create = async (data, clinicId, role = 'ADMIN') => {
+const create = async (data, clinicId, role = 'ADMIN', userId = null) => {
   // Validar datos requeridos
   if (!data.name || data.price === undefined || data.price === null) {
     throw new AppError('Nombre y precio son requeridos', 400);
@@ -33,6 +33,19 @@ const create = async (data, clinicId, role = 'ADMIN') => {
     ? { ...data, price: 0, priceType: 'VARIABLE', cost: null, stock: 0 }
     : (data.priceType || isVariableProduct ? { ...data, priceType } : data);
 
+  if (role === 'USER') {
+    delete normalizedData.supplier;
+    delete normalizedData.supplierId;
+    delete normalizedData.unit;
+    delete normalizedData.activeIngredient;
+    delete normalizedData.concentration;
+    delete normalizedData.dosageForm;
+    delete normalizedData.laboratory;
+    delete normalizedData.indicatedSpecies;
+    delete normalizedData.administrationRoute;
+    delete normalizedData.requiresPrescription;
+  }
+
   if (normalizedData.cost !== undefined && normalizedData.cost !== null && normalizedData.cost < 0) {
     throw new AppError('El costo no puede ser negativo', 400);
   }
@@ -58,11 +71,21 @@ const create = async (data, clinicId, role = 'ADMIN') => {
     if (!subcategory) throw new AppError('Subcategoría no encontrada para la categoría activa', 400, 'SUBCATEGORY_NOT_FOUND');
   }
 
+  if (normalizedData.supplierId !== undefined && normalizedData.supplierId !== null) {
+    if (!Number.isInteger(Number(normalizedData.supplierId)) || Number(normalizedData.supplierId) < 1) {
+      throw new AppError('El proveedor seleccionado no es válido', 400, 'INVALID_SUPPLIER_ID');
+    }
+    const supplier = await repository.findActiveSupplier(normalizedData.supplierId, clinicId);
+    if (!supplier) throw new AppError('Proveedor no encontrado o inactivo para la clínica activa', 400, 'SUPPLIER_NOT_AVAILABLE');
+  }
+
   if (normalizedData.maxStock !== undefined && normalizedData.maxStock !== null && normalizedData.maxStock < normalizedData.minStock) {
     throw new AppError('El stock máximo no puede ser menor al stock mínimo', 400, 'INVALID_MAX_STOCK');
   }
 
-  return await repository.create(normalizedData, clinicId);
+  return userId == null
+    ? await repository.create(normalizedData, clinicId)
+    : await repository.create(normalizedData, clinicId, userId);
 };
 
 const getAll = async (clinicId) => {
@@ -80,15 +103,25 @@ const getById = async (id, clinicId) => {
 const update = async (id, clinicId, data) => {
   const product = await getById(id, clinicId);
   const editableFields = [
-    'name', 'description', 'sku', 'barcode', 'brand', 'supplier',
+    'name', 'description', 'sku', 'barcode', 'brand', 'supplier', 'supplierId',
+    'unit', 'activeIngredient', 'concentration', 'dosageForm', 'laboratory',
+    'indicatedSpecies', 'administrationRoute', 'requiresPrescription',
     'categoryId', 'subcategoryId', 'priceType', 'price', 'ivaIncluded',
-    'cost', 'stock', 'minStock', 'maxStock', 'isActive', 'discontinuedAt',
+    'cost', 'minStock', 'maxStock', 'isActive', 'discontinuedAt',
   ];
   const updateData = Object.fromEntries(
     editableFields
       .filter((field) => Object.prototype.hasOwnProperty.call(data || {}, field))
       .map((field) => [field, data[field]])
   );
+
+  if (Object.prototype.hasOwnProperty.call(data || {}, 'supplierId') && data.supplierId !== null && data.supplierId !== undefined && Number(data.supplierId) !== product.supplierId) {
+    if (!Number.isInteger(Number(data.supplierId)) || Number(data.supplierId) < 1) {
+      throw new AppError('El proveedor seleccionado no es válido', 400, 'INVALID_SUPPLIER_ID');
+    }
+    const supplier = await repository.findActiveSupplier(data.supplierId, clinicId);
+    if (!supplier) throw new AppError('Proveedor no encontrado o inactivo para la clínica activa', 400, 'SUPPLIER_NOT_AVAILABLE');
+  }
 
   if (data.ivaIncluded !== undefined && typeof data.ivaIncluded !== 'boolean') {
     throw new AppError('La configuración de IVA debe ser booleana', 400, 'INVALID_IVA_INCLUDED');

@@ -5,6 +5,7 @@ const petRoutes = require("../modules/pets/pet.routes");
 const appointmentRoutes = require("../modules/appointments/appointment.routes");
 const consultationRoutes = require("../modules/consultations/consultation.routes");
 const productRoutes = require("../modules/products/product.routes");
+const supplierRoutes = require("../modules/suppliers/supplier.routes");
 const serviceRoutes = require("../modules/services/service.routes");
 const saleRoutes = require("../modules/sales/sale.routes");
 const diagnosisRoutes = require("../modules/diagnoses/diagnosis.routes");
@@ -27,6 +28,7 @@ module.exports = (app) => {
   app.use("/api/appointments", appointmentRoutes);
   app.use("/api/consultations", consultationRoutes);
   app.use("/api/products", productRoutes);
+  app.use("/api/suppliers", supplierRoutes);
   app.use("/api/services", serviceRoutes);
   app.use("/api/sales", saleRoutes);
   app.use("/api/diagnoses", diagnosisRoutes);

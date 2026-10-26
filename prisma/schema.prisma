@@ -51,15 +51,11 @@ model Clinic {
   printTargets           PrintTarget[]
   printTemplates         PrintTemplate[]
   printAssets            PrintAsset[]
-model Clinic {
-  id                   Int                  @id @default(autoincrement())
-// ... (rest of Clinic model remains same)
+  suppliers              Supplier[]
   printBatches           PrintBatch[]
   printJobs              PrintJob[]
   printRules             PrintRule[]
   cashAuditEvents        CashAuditEvent[]
-// ...
-
   veterinarianActivities VeterinarianActivity[]
 
   subscriptionInstallments SubscriptionInstallment[]
@@ -129,6 +125,15 @@ model Product {
   barcode        String?
   brand          String?
   supplier       String?
+  supplierId     Int?                @map("supplier_id")
+  unit           String?             @db.VarChar(50)
+  activeIngredient String?            @db.VarChar(191)
+  concentration  String?              @db.VarChar(191)
+  dosageForm     String?              @db.VarChar(100)
+  laboratory     String?              @db.VarChar(191)
+  indicatedSpecies String?             @db.VarChar(191)
+  administrationRoute String?          @db.VarChar(100)
+  requiresPrescription Boolean?
   categoryId     Int?                @map("category_id")
   subcategoryId  Int?                @map("subcategory_id")
   priceType      ProductPriceType    @default(FIXED)
@@ -145,13 +150,38 @@ model Product {
   clinicId       Int
   category       ProductCategory?    @relation(fields: [categoryId], references: [id])
   subcategory    ProductSubcategory? @relation(fields: [subcategoryId], references: [id])
+  supplierRecord Supplier?           @relation(fields: [supplierId, clinicId], references: [id, clinicId], onDelete: Restrict, map: "products_supplier_clinic_fkey")
   clinic         Clinic              @relation(fields: [clinicId], references: [id])
   stockMovements StockMovement[]
 
   @@index([categoryId], map: "products_category_id_fkey")
   @@index([subcategoryId], map: "products_subcategory_id_fkey")
+  @@index([supplierId, clinicId], map: "products_supplier_id_clinic_id_idx")
   @@index([clinicId], map: "products_clinicId_fkey")
   @@map("products")
+}
+
+model Supplier {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(191)
+  rut          String?   @db.VarChar(50)
+  contactName  String?   @db.VarChar(191)
+  phone        String?   @db.VarChar(50)
+  email        String?   @db.VarChar(191)
+  address      String?   @db.VarChar(255)
+  notes        String?   @db.Text
+  isActive     Boolean   @default(true)
+  clinicId     Int       @map("clinic_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  clinic       Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  products     Product[]
+
+  @@unique([clinicId, name], map: "suppliers_clinic_id_name_key")
+  @@unique([clinicId, rut], map: "suppliers_clinic_id_rut_key")
+  @@unique([id, clinicId], map: "suppliers_id_clinic_id_key")
+  @@index([clinicId, isActive], map: "suppliers_clinic_id_is_active_idx")
+  @@map("suppliers")
 }
 
 model ProductCategory {
@@ -1004,11 +1034,28 @@ model PrintRule {
 }
 
 model PrintTarget {
-// ... (rest of PrintTarget model remains same)
+  id         Int      @id @default(autoincrement())
+  clinicId   Int
+  locationId Int
+  printerId  Int?
+  code       String
+  name       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clinic   Clinic        @relation(fields: [clinicId], references: [id])
+  location PrintLocation @relation(fields: [locationId], references: [id])
+  printer  Printer?      @relation(fields: [printerId], references: [id])
   jobs     PrintJob[]
   rules    PrintRule[]
-// ...
 
+  @@unique([clinicId, code])
+  @@index([clinicId])
+  @@index([locationId])
+  @@index([printerId])
+  @@map("print_targets")
+}
 
 model PrintTemplate {
   id           Int      @id @default(autoincrement())
