@@ -21,9 +21,12 @@ router.post('/printers', admins, validate(validation.createPrinter), controller.
 router.get('/targets', admins, controller.listTargets);
 router.post('/targets', admins, validate(validation.createTarget), controller.createTarget);
 router.get('/templates', admins, controller.listTemplates);
-router.post('/templates', admins, validate(validation.createTemplate), controller.createTemplate);
-router.get('/rules', admins, controller.listRules);
-router.post('/rules', admins, validate(validation.createRule), controller.createRule);
+  router.post('/templates', admins, validate(validation.createTemplate), controller.createTemplate);
+  router.post('/templates/:templateId/delete', admins, controller.deleteTemplate);
+  router.get('/rules', admins, controller.listRules);
+  router.post('/rules', admins, validate(validation.createRule), controller.createRule);
+  router.patch('/rules/:ruleId', admins, validate(validation.updateRule), controller.updateRule);
+  router.post('/rules/:ruleId/delete', admins, controller.deleteRule);
   router.post('/templates/versions', admins, validate(validation.createTemplateVersion), controller.createTemplateVersion);
   router.post('/templates/versions/:versionId/activate', admins, controller.activateTemplateVersion);
   router.post('/templates/versions/:versionId/delete', admins, controller.deleteDraftTemplateVersion);

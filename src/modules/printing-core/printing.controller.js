@@ -23,6 +23,7 @@ const list = (method) => wrap(async (req, res) => res.json(await service[method]
   const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
   const activateTemplateVersion = wrap(async (req, res) => res.json(await service.activateTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
   const deleteDraftTemplateVersion = wrap(async (req, res) => res.json(await service.deleteDraftTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
+  const deleteTemplate = wrap(async (req, res) => res.json(await service.deleteTemplate(Number(req.params.templateId), clinicIdFromRequest(req))));
   const deactivateResource = wrap(async (req, res) => res.json(await service.deactivateResource(req.params.resource, req.params.resourceId, clinicIdFromRequest(req))));
   const updateResource = wrap(async (req, res) => res.json(await service.updateResource(req.params.resource, req.params.resourceId, req.body, clinicIdFromRequest(req))));
 
@@ -33,8 +34,10 @@ module.exports = {
   createProfile: create('createProfile'), listProfiles: list('listProfiles'),
   createPrinter: create('createPrinter'), listPrinters: list('listPrinters'),
   createTarget: create('createTarget'), listTargets: list('listTargets'),
-  createTemplate: create('createTemplate'), listTemplates: list('listTemplates'),
-  createRule: create('createRule'), listRules: list('listRules'),
+    createTemplate: create('createTemplate'), listTemplates: list('listTemplates'), deleteTemplate,
+    createRule: create('createRule'), listRules: list('listRules'),
+    updateRule: wrap(async (req, res) => res.json(await service.updateRule(Number(req.params.ruleId), req.body, clinicIdFromRequest(req)))),
+    deleteRule: wrap(async (req, res) => res.json(await service.deleteRule(Number(req.params.ruleId), clinicIdFromRequest(req)))),
     createTemplateVersion: create('createTemplateVersion'), activateTemplateVersion, deleteDraftTemplateVersion, deactivateResource, updateResource,
   createAsset: create('createAsset'), listAssets: list('listAssets'),
     createBatch, listBatches: list('listBatches'),

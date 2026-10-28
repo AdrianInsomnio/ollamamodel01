@@ -87,6 +87,15 @@ const createTemplate = async (data, clinicId) => {
   }
 };
 
+const deleteTemplate = async (templateId, clinicId) => {
+  const id = Number(templateId);
+  if (!Number.isInteger(id) || id <= 0) throw new AppError('templateId no válido', 400, 'VALIDATION_ERROR');
+  const result = await repository.deleteTemplate(id, clinicId);
+  if (!result) throw new AppError('Template no encontrado o no autorizado', 404, 'PRINT_TEMPLATE_NOT_FOUND');
+  if (result.linkedJobs) throw new AppError('No se puede eliminar la plantilla porque tiene trabajos de impresión asociados', 409, 'PRINT_TEMPLATE_IN_USE');
+  return result;
+};
+
 const createTemplateVersion = async (data, clinicId) => {
   if (!data.templateId || !Number.isInteger(data.version) || data.version < 1) throw new AppError('templateId y version válida son obligatorios', 400, 'VALIDATION_ERROR');
   assertPaper(data.paperType, data.paperSize);
@@ -111,6 +120,7 @@ const buildContract = ({ clinic, sourceDocumentType, sourceDocumentId, variant, 
   document: {
     type: sourceDocumentType,
     number: data.documentNumber == null ? String(sourceDocumentId) : String(data.documentNumber),
+    date: data.documentDate || null,
     variant,
     source: { system: 'OLLModel', type: sourceDocumentType, id: String(sourceDocumentId) }
   },
@@ -138,6 +148,18 @@ const listRules = async (clinicId) => {
 
 const createRule = async (data, clinicId) => {
   return repository.createRule(data, clinicId);
+};
+
+const updateRule = async (id, data, clinicId) => {
+  const result = await repository.updateRule(id, data, clinicId);
+  if (!result.count) throw new AppError('Regla de impresión no encontrada', 404, 'PRINT_RULE_NOT_FOUND');
+  return repository.listRules(clinicId).then((rules) => rules.find((rule) => rule.id === id));
+};
+
+const deleteRule = async (id, clinicId) => {
+  const result = await repository.deleteRule(id, clinicId);
+  if (!result.count) throw new AppError('Regla de impresión no encontrada', 404, 'PRINT_RULE_NOT_FOUND');
+  return { id, deleted: true };
 };
 
 const createBatchFromRules = async (event, data, clinicId, requestedById) => {
@@ -196,12 +218,19 @@ const createBatch = async (data, clinicId, requestedById) => {
     const target = await repository.findTarget(input.targetId, clinicId);
     if (!target || !target.printer) throw new AppError('PrintTarget sin impresora activa o no autorizado', 409, 'PRINT_TARGET_UNAVAILABLE');
     const printer = target.printer;
-    const templateVersion = await repository.findTemplateVersion(input.templateVersionId, clinicId);
+    const templateVersion = input.templateVersionId
+      ? await repository.findTemplateVersion(input.templateVersionId, clinicId)
+      : input.templateKey
+        ? await repository.findActiveTemplateVersionByKey(input.templateKey, clinicId)
+        : null;
     if (!templateVersion || templateVersion.status !== 'ACTIVE') throw new AppError('TemplateVersion activa no encontrada o no autorizada', 409, 'PRINT_TEMPLATE_UNAVAILABLE');
     if (templateVersion.paperType !== printer.paperType || templateVersion.paperSize !== printer.paperSize) {
       throw new AppError('Template y printer incompatibles', 409, 'PRINT_INCOMPATIBLE');
     }
     const contract = buildContract({ clinic, sourceDocumentType: data.sourceDocumentType, sourceDocumentId: data.sourceDocumentId, variant, target, printer, templateVersion, data: { ...data, ...input } });
+    const definition = templateVersion.definition && typeof templateVersion.definition === 'object' ? templateVersion.definition : {};
+    contract.template.layout = Array.isArray(definition.elements) ? definition.elements : Array.isArray(definition.layout) ? definition.layout : [];
+    contract.template.globalSettings = definition.globalSettings || {};
     jobs.push({
       clinicId, originalJobId: input.originalJobId || null, targetId: target.id, printerId: printer.id,
       printAgentId: printer.printAgentId || null, templateVersionId: templateVersion.id,
@@ -370,9 +399,9 @@ const cancelJob = (jobId, clinicId) => transitionJob(jobId, clinicId, 'CANCELLED
 
 module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
-  createTemplate, createTemplateVersion, activateTemplateVersion, deleteDraftTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
+  createTemplate, deleteTemplate, createTemplateVersion, activateTemplateVersion, deleteDraftTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
   buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob, sendJobToAgent,
-  listRules, createRule,
+  listRules, createRule, updateRule, deleteRule, findRulesByEvent: repository.findRulesByEvent,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
   listAssets: repository.listAssets

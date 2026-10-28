@@ -38,6 +38,20 @@ const listTemplates = (clinicId) => prisma.printTemplate.findMany({
   orderBy: { name: 'asc' }
 });
 const createTemplate = (data, clinicId) => prisma.printTemplate.create({ data: { ...data, clinicId } });
+const deleteTemplate = async (id, clinicId) => prisma.$transaction(async (tx) => {
+  const template = await tx.printTemplate.findFirst({ where: { id, clinicId }, select: { id: true, templateKey: true } });
+  if (!template) return null;
+  const versions = await tx.printTemplateVersion.findMany({ where: { templateId: id }, select: { id: true } });
+  const versionIds = versions.map(({ id: versionId }) => versionId);
+  const linkedJobs = versionIds.length
+    ? await tx.printJob.count({ where: { templateVersionId: { in: versionIds } } })
+    : 0;
+  if (linkedJobs) return { linkedJobs };
+  await tx.printRule.deleteMany({ where: { clinicId, templateKey: template.templateKey } });
+  await tx.printTemplateVersion.deleteMany({ where: { templateId: id } });
+  await tx.printTemplate.delete({ where: { id } });
+  return { id, deleted: true };
+});
 const createTemplateVersion = (data) => prisma.printTemplateVersion.create({ data });
 const deleteDraftTemplateVersion = (id, clinicId) => prisma.printTemplateVersion.deleteMany({
   where: { id, status: 'DRAFT', template: { clinicId, isActive: true } }
@@ -65,6 +79,10 @@ const findTemplateVersion = (id, clinicId) => prisma.printTemplateVersion.findFi
   include: { template: true }
 });
 const findTemplate = (id, clinicId) => prisma.printTemplate.findFirst({ where: { id, clinicId, isActive: true } });
+const findActiveTemplateVersionByKey = (templateKey, clinicId) => prisma.printTemplateVersion.findFirst({
+  where: { status: 'ACTIVE', template: { clinicId, templateKey, isActive: true } },
+  include: { template: true }
+});
 
 const createBatch = (data) => prisma.printBatch.create({
   data: {
@@ -101,13 +119,14 @@ const deactivateResource = (model, id, clinicId) => prisma[model].updateMany({ w
 const updateResource = (model, id, clinicId, data) => prisma[model].updateMany({ where: { id, clinicId, isActive: true }, data });
 
 module.exports = {
-  listLocations, createLocation, findLocation,
+    listLocations, createLocation, findLocation,
+    listRules, createRule, updateRule, deleteRule, findRulesByEvent,
   listAgents, createAgent, findAgent,
   listProfiles, createProfile, findProfile,
   listPrinters, createPrinter,
   listTargets, createTarget,
-  listTemplates, createTemplate, createTemplateVersion, deleteDraftTemplateVersion,
+    listTemplates, createTemplate, deleteTemplate, createTemplateVersion, deleteDraftTemplateVersion,
   listAssets, createAsset,
-  findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion,
+  findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion, findActiveTemplateVersionByKey,
   createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus, deactivateResource, updateResource
 };
