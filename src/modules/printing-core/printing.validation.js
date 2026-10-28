@@ -47,7 +47,16 @@ const updateRule = { body: Joi.object({
 const createTemplateVersion = { body: Joi.object({ templateId: id.required(), version: Joi.number().integer().positive().required(), status: Joi.string().valid('DRAFT', 'ACTIVE', 'ARCHIVED'), paperType: Joi.string().valid('THERMAL', 'SHEET').required(), paperSize: Joi.string().valid('THERMAL_58', 'THERMAL_80', 'A4', 'LETTER', 'A5', 'LEGAL', 'CUSTOM').required(), orientation: Joi.string().valid('PORTRAIT', 'LANDSCAPE'), definition: Joi.object().required() }) };
 const createAsset = { body: Joi.object({ name: bodyName.required(), storageKey: bodyName.required(), mimeType: bodyName.required(), width: Joi.number().integer().positive().allow(null), height: Joi.number().integer().positive().allow(null) }) };
 const createBatch = { body: Joi.object({ sourceDocumentType: bodyName.required(), sourceDocumentId: Joi.alternatives().try(Joi.string(), Joi.number()).required(), variant: Joi.string().valid('ORIGINAL', 'DUPLICATE', 'COPY', 'PREVIEW'), originalBatchId: id.allow(null), reason: Joi.string().max(191).allow(null, ''), documentNumber: Joi.alternatives().try(Joi.string(), Joi.number()), customer: Joi.object().unknown(true), items: Joi.array().items(Joi.object().unknown(true)), totals: Joi.object().unknown(true), payments: Joi.array().items(Joi.object().unknown(true)), footer: Joi.object().unknown(true), context: Joi.object().unknown(true), jobs: Joi.array().items(Joi.object({ targetId: id.required(), templateVersionId: id.required(), originalJobId: id.allow(null), documentNumber: Joi.alternatives().try(Joi.string(), Joi.number()), customer: Joi.object().unknown(true), items: Joi.array().items(Joi.object().unknown(true)), totals: Joi.object().unknown(true), payments: Joi.array().items(Joi.object().unknown(true)), footer: Joi.object().unknown(true), context: Joi.object().unknown(true) })).min(1).required() }) };
+const listBatches = { query: Joi.object({
+  clinicId: id,
+  take: Joi.number().integer().min(1).max(100).default(50),
+  skip: Joi.number().integer().min(0).max(100000).default(0),
+  status: Joi.string().valid('PENDING', 'PROCESSING', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'),
+  sourceDocumentType: bodyName,
+  startDate: Joi.date().iso(),
+  endDate: Joi.date().iso(),
+}) };
 
   const jobFailure = { body: Joi.object({ error: Joi.string().max(10000).allow('', null) }) };
   const updateResource = { body: Joi.object().unknown(true) };
-  module.exports = { createLocation, createAgent, createProfile, createPrinter, createTarget, createTemplate, createRule, updateRule, createTemplateVersion, createAsset, createBatch, jobFailure, updateResource };
+  module.exports = { createLocation, createAgent, createProfile, createPrinter, createTarget, createTemplate, createRule, updateRule, createTemplateVersion, createAsset, createBatch, listBatches, jobFailure, updateResource };

@@ -346,16 +346,18 @@ const createBatch = async (data, clinicId, requestedById) => {
   return repository.createBatch({ ...data, clinicId, requestedById, variant, jobs });
 };
 
-const listBatches = async (clinicId, take, filters = {}) => {
+const listBatches = async (clinicId, query = {}) => {
+  const take = Math.min(Math.max(Number.parseInt(query.take, 10) || 50, 1), 100);
+  const skip = Math.min(Math.max(Number.parseInt(query.skip, 10) || 0, 0), 100000);
   const sanitizedFilters = {};
-  if (filters.status) sanitizedFilters.status = filters.status;
-  if (filters.sourceDocumentType) sanitizedFilters.sourceDocumentType = filters.sourceDocumentType;
-  if (filters.startDate || filters.endDate) {
+  if (query.status) sanitizedFilters.status = query.status;
+  if (query.sourceDocumentType) sanitizedFilters.sourceDocumentType = query.sourceDocumentType;
+  if (query.startDate || query.endDate) {
     sanitizedFilters.createdAt = {};
-    if (filters.startDate) sanitizedFilters.createdAt.gte = new Date(filters.startDate);
-    if (filters.endDate) sanitizedFilters.createdAt.lte = new Date(filters.endDate);
+    if (query.startDate) sanitizedFilters.createdAt.gte = new Date(query.startDate);
+    if (query.endDate) sanitizedFilters.createdAt.lte = new Date(query.endDate);
   }
-  return repository.listBatches(clinicId, Math.min(Number(take) || 50, 100), sanitizedFilters);
+  return repository.listBatches(clinicId, take, skip, sanitizedFilters);
 };
 
 const activateTemplateVersion = async (versionId, clinicId) => {
@@ -509,5 +511,13 @@ module.exports = {
   listRules, createRule, updateRule, deleteRule, findRulesByEvent,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
+  listTemplateSummaries: repository.listTemplateSummaries,
+  getTemplateDetails: async (templateId, clinicId) => {
+    const id = Number(templateId);
+    if (!Number.isInteger(id) || id <= 0) throw new AppError('templateId no válido', 400, 'VALIDATION_ERROR');
+    const template = await repository.findTemplateDetails(id, clinicId);
+    if (!template) throw new AppError('Template no encontrado o no autorizado', 404, 'PRINT_TEMPLATE_NOT_FOUND');
+    return template;
+  },
   listAssets: repository.listAssets
 };

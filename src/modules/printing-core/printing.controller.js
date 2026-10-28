@@ -22,6 +22,7 @@ const list = (method) => wrap(async (req, res) => res.json(await service[method]
   const createBatch = wrap(async (req, res) => res.status(201).json(await service.createBatch(req.body, clinicIdFromRequest(req), req.user.id)));
   const jobAction = (method) => wrap(async (req, res) => res.json(await service[method](Number(req.params.jobId), clinicIdFromRequest(req), req.body)));
   const activateTemplateVersion = wrap(async (req, res) => res.json(await service.activateTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
+  const getTemplateDetails = wrap(async (req, res) => res.json(await service.getTemplateDetails(req.params.templateId, clinicIdFromRequest(req))));
   const deleteDraftTemplateVersion = wrap(async (req, res) => res.json(await service.deleteDraftTemplateVersion(Number(req.params.versionId), clinicIdFromRequest(req))));
   const deleteTemplate = wrap(async (req, res) => res.json(await service.deleteTemplate(Number(req.params.templateId), clinicIdFromRequest(req))));
   const deactivateResource = wrap(async (req, res) => res.json(await service.deactivateResource(req.params.resource, req.params.resourceId, clinicIdFromRequest(req))));
@@ -34,7 +35,8 @@ module.exports = {
   createProfile: create('createProfile'), listProfiles: list('listProfiles'),
   createPrinter: create('createPrinter'), listPrinters: list('listPrinters'),
   createTarget: create('createTarget'), listTargets: list('listTargets'),
-    createTemplate: create('createTemplate'), listTemplates: list('listTemplates'), deleteTemplate,
+    createTemplate: create('createTemplate'), listTemplates: list('listTemplates'),
+    listTemplateSummaries: list('listTemplateSummaries'), getTemplateDetails, deleteTemplate,
     createRule: create('createRule'), listRules: list('listRules'),
     updateRule: wrap(async (req, res) => res.json(await service.updateRule(Number(req.params.ruleId), req.body, clinicIdFromRequest(req)))),
     deleteRule: wrap(async (req, res) => res.json(await service.deleteRule(Number(req.params.ruleId), clinicIdFromRequest(req)))),

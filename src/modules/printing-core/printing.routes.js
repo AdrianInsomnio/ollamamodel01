@@ -21,6 +21,8 @@ router.post('/printers', admins, validate(validation.createPrinter), controller.
 router.get('/targets', admins, controller.listTargets);
 router.post('/targets', admins, validate(validation.createTarget), controller.createTarget);
 router.get('/templates', admins, controller.listTemplates);
+router.get('/templates/summary', admins, controller.listTemplateSummaries);
+router.get('/templates/:templateId', admins, controller.getTemplateDetails);
   router.post('/templates', admins, validate(validation.createTemplate), controller.createTemplate);
   router.post('/templates/:templateId/delete', admins, controller.deleteTemplate);
   router.get('/rules', admins, controller.listRules);
@@ -34,7 +36,7 @@ router.get('/templates', admins, controller.listTemplates);
   router.patch('/config/:resource/:resourceId', admins, validate(validation.updateResource), controller.updateResource);
 router.get('/assets', admins, controller.listAssets);
 router.post('/assets', admins, validate(validation.createAsset), controller.createAsset);
-router.get('/batches', controller.listBatches);
+router.get('/batches', validate(validation.listBatches), controller.listBatches);
   router.post('/batches', idempotency('POST /api/printing/batches'), validate(validation.createBatch), controller.createBatch);
   router.post('/jobs/:jobId/sent', controller.markJobSent);
   router.post('/jobs/:jobId/printed', controller.markJobPrinted);

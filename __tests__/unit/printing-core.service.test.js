@@ -19,7 +19,10 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findBatch: jest.fn(),
   findJob: jest.fn(),
   updateJob: jest.fn(),
-  updateBatchStatus: jest.fn()
+  updateBatchStatus: jest.fn(),
+  listBatches: jest.fn(),
+  listTemplateSummaries: jest.fn(),
+  findTemplateDetails: jest.fn()
 }));
 jest.mock('axios', () => ({ post: jest.fn() }));
 
@@ -28,6 +31,18 @@ const service = require('../../src/modules/printing-core/printing.service');
 const axios = require('axios');
 
 describe('printing core service', () => {
+  test('bounds batch pagination and passes filters to repository', async () => {
+    repository.listBatches.mockResolvedValue([]);
+    await service.listBatches(7, { take: '26', skip: '50', status: 'FAILED', sourceDocumentType: 'SALE' });
+    expect(repository.listBatches).toHaveBeenCalledWith(7, 26, 50, { status: 'FAILED', sourceDocumentType: 'SALE' });
+  });
+
+  test('loads template details tenant-scoped and rejects invalid ids', async () => {
+    repository.findTemplateDetails.mockResolvedValue({ id: 8, clinicId: 7, versions: [] });
+    await expect(service.getTemplateDetails('8', 7)).resolves.toMatchObject({ id: 8, clinicId: 7 });
+    expect(repository.findTemplateDetails).toHaveBeenCalledWith(8, 7);
+    await expect(service.getTemplateDetails('0', 7)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
   test('builds a versioned agnostic print contract', () => {
     const contract = service.buildContract({
       clinic: { id: 7, name: 'Mi Empresa' },

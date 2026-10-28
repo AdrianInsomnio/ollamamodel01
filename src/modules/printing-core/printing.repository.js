@@ -77,6 +77,21 @@ const listTemplates = (clinicId) => prisma.printTemplate.findMany({
   include: { versions: { orderBy: { version: 'desc' } } },
   orderBy: { name: 'asc' }
 });
+const listTemplateSummaries = (clinicId) => prisma.printTemplate.findMany({
+  where: { clinicId },
+  select: {
+    id: true, templateKey: true, name: true, documentType: true, isActive: true,
+    versions: {
+      orderBy: { version: 'desc' },
+      select: { id: true, templateId: true, version: true, status: true, paperType: true, paperSize: true, orientation: true, createdAt: true }
+    }
+  },
+  orderBy: { name: 'asc' }
+});
+const findTemplateDetails = (id, clinicId) => prisma.printTemplate.findFirst({
+  where: { id, clinicId },
+  include: { versions: { orderBy: { version: 'desc' } } }
+});
 const createTemplate = (data, clinicId) => prisma.printTemplate.create({ data: { ...data, clinicId } });
 const deleteTemplate = async (id, clinicId) => prisma.$transaction(async (tx) => {
   const template = await tx.printTemplate.findFirst({ where: { id, clinicId }, select: { id: true, templateKey: true } });
@@ -147,7 +162,7 @@ const createBatch = (data) => prisma.printBatch.create({
   include: { jobs: true }
 });
 
-const listBatches = (clinicId, take = 50, filters = {}) => prisma.printBatch.findMany({
+const listBatches = (clinicId, take = 50, skip = 0, filters = {}) => prisma.printBatch.findMany({
   where: { 
     clinicId, 
     ...(filters.status ? { status: filters.status } : {}), 
@@ -155,8 +170,12 @@ const listBatches = (clinicId, take = 50, filters = {}) => prisma.printBatch.fin
     ...(filters.createdAt ? { createdAt: filters.createdAt } : {})
   },
   take,
-  orderBy: { createdAt: 'desc' },
-  include: { jobs: true }
+  skip,
+  orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  select: {
+    id: true, sourceDocumentType: true, status: true, createdAt: true,
+    jobs: { select: { id: true, status: true, targetId: true, lastError: true } }
+  }
 });
 
 const findBatch = (id, clinicId) => prisma.printBatch.findFirst({ where: { id, clinicId }, include: { jobs: true } });
@@ -173,7 +192,7 @@ module.exports = {
   listProfiles, createProfile, findProfile,
   listPrinters, createPrinter,
   listTargets, createTarget,
-    listTemplates, createTemplate, deleteTemplate, createTemplateVersion, deleteDraftTemplateVersion,
+    listTemplates, listTemplateSummaries, findTemplateDetails, createTemplate, deleteTemplate, createTemplateVersion, deleteDraftTemplateVersion,
   listAssets, createAsset,
   findClinic, findTarget, findTargetForRule, findPrinter, findTemplate, findTemplateByKey, findTemplateByKeyForRule, findTemplateVersion, findActiveTemplateVersionByKey,
   createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus, deactivateResource, updateResource
