@@ -468,14 +468,10 @@ const printSale = async (saleId, clinicId, userId, reason) => {
   }
 
   // 2. Preparar los jobs basados en las reglas encontradas
-  const jobs = rules.map(rule => {
-    // Intentamos resolver la versión activa del template especificado en la regla
-    // Nota: El printingService ya maneja la resolución interna si pasamos la key
-    return {
-      targetId: rule.targetId,
-      templateKey: rule.templateKey, // El backend ahora debe resolver esto a un ID de versión
-    };
-  });
+  const jobs = rules.flatMap(rule => Array.from({ length: rule.copies || 1 }, () => ({
+    targetId: rule.targetId,
+    templateKey: rule.templateKey,
+  })));
 
   // 3. Mapear datos de venta al formato del Print Contract v1
   const batchData = {
@@ -529,7 +525,15 @@ const printSale = async (saleId, clinicId, userId, reason) => {
 
   // 4. Crear el Batch a través del Printing Core
   const batch = await printingService.createBatch(batchData, clinicId, userId);
-  await Promise.all(batch.jobs.map(job => printingService.sendJobToAgent(job.id, clinicId)));
+  const dispatchErrors = [];
+  for (const job of [...batch.jobs].sort((a, b) => a.id - b.id)) {
+    try {
+      await printingService.sendJobToAgent(job.id, clinicId);
+    } catch (error) {
+      dispatchErrors.push(error);
+    }
+  }
+  if (dispatchErrors.length) throw dispatchErrors[0];
   const mainJob = batch.jobs[0];
 
   // 5. Retorno compatible con el frontend legacy
@@ -764,7 +768,62 @@ const cancelSalePhase4 = async (id, clinicId, userId, reason) => {
   if (typeof repository.cancelSaleAtomic !== 'function') {
     throw new AppError('Venta no encontrada', 404);
   }
-  return repository.cancelSaleAtomic({ id, clinicId, userId, reason });
+  let rules = [];
+  let saleSnapshot = null;
+  try {
+    rules = await printingService.findRulesByEvent(clinicId, 'CANCELLATION') || [];
+    if (rules.length) saleSnapshot = await repository.findById(id, clinicId);
+  } catch (error) {
+    console.error('No se pudo preparar la impresión de cancelación', error);
+  }
+
+  const result = await repository.cancelSaleAtomic({ id, clinicId, userId, reason });
+  if (!rules.length || !saleSnapshot) return result;
+
+  try {
+    const batch = await printingService.createBatch({
+      sourceDocumentType: 'CANCELLATION',
+      sourceDocumentId: String(id),
+      documentNumber: String(id),
+      documentDate: saleSnapshot.createdAt,
+      variant: 'ORIGINAL',
+      reason: reason || 'Cancelación de venta',
+      customer: {
+        name: saleSnapshot.client?.name,
+        phone: saleSnapshot.client?.phone,
+        document: saleSnapshot.client?.documentId,
+      },
+      items: (saleSnapshot.saleItems || []).map(item => ({
+        code: String(item.itemId),
+        name: item.nameSnapshot,
+        description: item.nameSnapshot,
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(item.unitPrice ?? item.priceSnapshot ?? 0),
+        total: Number(item.subtotal ?? 0),
+        tax: Number(item.taxAmount || 0),
+      })),
+      totals: {
+        subtotal: saleSnapshot.subtotal,
+        discount: saleSnapshot.discount,
+        tax: saleSnapshot.tax,
+        total: saleSnapshot.total,
+      },
+      payments: (saleSnapshot.payments || []).map(payment => ({ method: payment.method, amount: Number(payment.amount) })),
+      context: { status: 'CANCELLED', cancelledAt: new Date().toISOString(), reason: reason || null },
+      jobs: rules.flatMap(rule => Array.from({ length: rule.copies || 1 }, () => ({ targetId: rule.targetId, templateKey: rule.templateKey }))),
+    }, clinicId, userId);
+    for (const job of [...batch.jobs].sort((a, b) => a.id - b.id)) {
+      try {
+        await printingService.sendJobToAgent(job.id, clinicId);
+      } catch (error) {
+        console.error('Falló una salida de impresión de cancelación', error);
+      }
+    }
+  } catch (error) {
+    // La cancelación ya quedó confirmada. Un problema de impresión no debe reportar como fallida esa operación.
+    console.error('No se pudo despachar la impresión de cancelación', error);
+  }
+  return result;
 };
 
 const returnSale = async (id, items, clinicId, userId) => {

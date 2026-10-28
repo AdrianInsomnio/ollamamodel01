@@ -4,6 +4,7 @@ const { AppError } = require('../../core/errors/AppError');
 
 const PAPER_TYPES = new Set(['THERMAL', 'SHEET']);
 const PAPER_SIZES = new Set(['THERMAL_58', 'THERMAL_80', 'A4', 'LETTER', 'A5', 'LEGAL', 'CUSTOM']);
+const CONNECTED_PRINT_EVENTS = new Set(['SALE', 'CANCELLATION']);
 
 const requireName = (value, field) => {
   if (!value || typeof value !== 'string' || !value.trim()) throw new AppError(`${field} es obligatorio`, 400, 'VALIDATION_ERROR');
@@ -139,21 +140,114 @@ const buildContract = ({ clinic, sourceDocumentType, sourceDocumentId, variant, 
 });
 
 const listRules = async (clinicId) => {
-  try {
-    return await repository.listRules(clinicId);
-  } catch (error) {
-    return [];
+  const rules = await repository.listRules(clinicId);
+  return rules.map((rule) => {
+    const legacyOutput = rule.outputs?.length === 1 ? rule.outputs[0] : null;
+    return {
+      ...rule,
+      targetId: legacyOutput?.targetId ?? rule.targetId ?? null,
+      templateKey: legacyOutput?.templateKey ?? rule.templateKey ?? null,
+      priority: legacyOutput?.priority ?? rule.priority,
+    };
+  });
+};
+
+const normalizeRule = (data) => {
+  const outputs = Array.isArray(data.outputs) ? data.outputs : (data.targetId && data.templateKey ? [{
+    name: data.outputName || data.templateKey,
+    targetId: data.targetId,
+    templateKey: data.templateKey,
+    priority: data.priority ?? 0,
+    copies: data.copies ?? 1,
+    isActive: data.outputIsActive ?? true,
+  }] : []);
+  requireName(data.name || data.event, 'name');
+  requireName(data.event, 'event');
+  if (!outputs.length) throw new AppError('La regla debe incluir al menos una salida', 400, 'PRINT_OUTPUTS_REQUIRED');
+  return {
+    name: String(data.name || data.event).trim(),
+    event: data.event.trim(),
+    isActive: data.isActive ?? true,
+    priority: Number.isInteger(data.priority) ? data.priority : 0,
+    outputs: outputs.map((output) => ({
+      name: String(output.name || output.templateKey || '').trim(),
+      targetId: Number(output.targetId),
+      templateKey: String(output.templateKey || '').trim(),
+      priority: Number.isInteger(output.priority) ? output.priority : 0,
+      copies: output.copies ?? 1,
+      isActive: output.isActive ?? true,
+    })),
+  };
+};
+
+const validateRuleOutputs = async (data, clinicId) => {
+  if (data.isActive && data.outputs.some((output) => output.isActive) && !CONNECTED_PRINT_EVENTS.has(data.event)) {
+    throw new AppError(`No existe un flujo de impresión conectado para el evento ${data.event}`, 400, 'PRINT_EVENT_UNSUPPORTED');
+  }
+  const outputRoutes = new Set();
+  for (const output of data.outputs) {
+    requireName(output.name, 'output.name');
+    requireName(output.templateKey, 'output.templateKey');
+    if (!Number.isInteger(output.targetId) || output.targetId <= 0) throw new AppError('Cada salida requiere un destino válido', 400, 'VALIDATION_ERROR');
+    if (!Number.isInteger(output.copies) || output.copies < 1 || output.copies > 5) throw new AppError('Las copias deben estar entre 1 y 5', 400, 'VALIDATION_ERROR');
+    if (!Number.isInteger(output.priority)) throw new AppError('La prioridad debe ser un entero', 400, 'VALIDATION_ERROR');
+    const routeKey = `${output.targetId}:${output.templateKey}`;
+    if (outputRoutes.has(routeKey)) throw new AppError('La regla ya contiene una salida con la misma plantilla y destino', 409, 'PRINT_OUTPUT_DUPLICATED');
+    outputRoutes.add(routeKey);
+
+    let target = await repository.findTarget(output.targetId, clinicId);
+    if (!target && !(data.isActive && output.isActive)) target = await repository.findTargetForRule(output.targetId, clinicId);
+    if (!target) throw new AppError('Destino no encontrado o no autorizado', 403, 'PRINT_SCOPE_VIOLATION');
+    let template = await repository.findTemplateByKey(output.templateKey, clinicId);
+    if (!template && !(data.isActive && output.isActive)) template = await repository.findTemplateByKeyForRule(output.templateKey, clinicId);
+    if (!template) throw new AppError('Plantilla no encontrada o no autorizada', 403, 'PRINT_SCOPE_VIOLATION');
+
+    if (data.isActive && output.isActive) {
+      if (!target.isActive) throw new AppError(`El destino "${target.name}" está inactivo`, 409, 'PRINT_TARGET_UNAVAILABLE');
+      if (!template.isActive) throw new AppError(`La plantilla "${template.name}" está inactiva`, 409, 'PRINT_TEMPLATE_UNAVAILABLE');
+      const activeVersion = await repository.findActiveTemplateVersionByKey(output.templateKey, clinicId);
+      if (!activeVersion) throw new AppError(`La plantilla "${template.name}" no tiene una versión activa`, 409, 'PRINT_TEMPLATE_UNAVAILABLE');
+      if (!target.printer) throw new AppError(`El destino "${target.name}" no tiene una impresora asignada`, 409, 'PRINT_TARGET_UNAVAILABLE');
+      if (activeVersion.paperType !== target.printer.paperType || activeVersion.paperSize !== target.printer.paperSize) {
+        throw new AppError(`La plantilla "${template.name}" no es compatible con la impresora de "${target.name}"`, 409, 'PRINT_INCOMPATIBLE');
+      }
+    }
   }
 };
 
-const createRule = async (data, clinicId) => {
-  return repository.createRule(data, clinicId);
+const createRule = async (input, clinicId) => {
+  const data = normalizeRule(input);
+  await validateRuleOutputs(data, clinicId);
+  try {
+    return await repository.createRule(data, clinicId);
+  } catch (error) {
+    if (error.code === 'P2002') throw new AppError('Ya existe una regla con esos datos', 409, 'PRINT_RULE_DUPLICATED');
+    throw error;
+  }
 };
 
-const updateRule = async (id, data, clinicId) => {
-  const result = await repository.updateRule(id, data, clinicId);
+const updateRule = async (id, input, clinicId) => {
+  const existing = (await repository.listRules(clinicId)).find((rule) => rule.id === id);
+  if (!existing) throw new AppError('Regla de impresión no encontrada', 404, 'PRINT_RULE_NOT_FOUND');
+  const payload = Array.isArray(input.outputs)
+    ? normalizeRule(input)
+    : normalizeRule({
+      ...existing,
+      ...input,
+      outputs: existing.outputs.map((output, index) => index === 0 && (input.targetId !== undefined || input.templateKey !== undefined || input.outputName !== undefined || input.copies !== undefined || input.outputIsActive !== undefined)
+        ? { ...output, targetId: input.targetId ?? output.targetId, templateKey: input.templateKey ?? output.templateKey, name: input.outputName ?? output.name, priority: input.priority ?? output.priority, copies: input.copies ?? output.copies, isActive: input.outputIsActive ?? output.isActive }
+        : output)
+    });
+  await validateRuleOutputs(payload, clinicId);
+  let result;
+  try {
+    result = await repository.updateRule(id, payload, clinicId);
+  } catch (error) {
+    if (error.code === 'P2002') throw new AppError('Ya existe una regla con ese nombre para el evento', 409, 'PRINT_RULE_DUPLICATED');
+    throw error;
+  }
   if (!result.count) throw new AppError('Regla de impresión no encontrada', 404, 'PRINT_RULE_NOT_FOUND');
-  return repository.listRules(clinicId).then((rules) => rules.find((rule) => rule.id === id));
+  return result.rule;
 };
 
 const deleteRule = async (id, clinicId) => {
@@ -163,7 +257,7 @@ const deleteRule = async (id, clinicId) => {
 };
 
 const createBatchFromRules = async (event, data, clinicId, requestedById) => {
-  const rules = await repository.findRulesByEvent(clinicId, event);
+  const rules = await findRulesByEvent(clinicId, event);
   if (!rules.length) return null;
 
   const jobs = [];
@@ -172,15 +266,12 @@ const createBatchFromRules = async (event, data, clinicId, requestedById) => {
     if (!target || !target.printer) continue;
 
     const printer = target.printer;
-    const template = await repository.findTemplate(rule.templateKey, clinicId);
-    if (!template) continue;
-
-    const activeVersion = template.versions?.[0]; // Simplificación: usa la última
+    const activeVersion = await repository.findActiveTemplateVersionByKey(rule.templateKey, clinicId);
     if (!activeVersion) continue;
 
     // Validar compatibilidad básica
     if (activeVersion.paperType !== printer.paperType || activeVersion.paperSize !== printer.paperSize) {
-      console.warn(`Regla de impresión incompatible: Target ${target.name} vs Template ${template.name}`);
+      console.warn(`Regla de impresión incompatible: Target ${target.name} vs Template ${activeVersion.template.name}`);
       continue;
     }
 
@@ -191,7 +282,7 @@ const createBatchFromRules = async (event, data, clinicId, requestedById) => {
       templateVersionId: activeVersion.id,
       documentType: event,
       variant: 'ORIGINAL',
-      contractSnapshot: { /* Se resolverá en el createBatch real */ }
+      contractSnapshot: {}
     });
   }
 
@@ -203,6 +294,20 @@ const createBatchFromRules = async (event, data, clinicId, requestedById) => {
     variant: 'ORIGINAL', 
     jobs 
   }, clinicId, requestedById);
+};
+
+const findRulesByEvent = async (clinicId, event) => {
+  const rules = await repository.findRulesByEvent(clinicId, event);
+  return rules.flatMap((rule) => {
+    const outputs = rule.outputs?.length ? rule.outputs.filter((output) => output.isActive) : rule.targetId && rule.templateKey ? [{
+      id: rule.id, name: rule.templateKey, targetId: rule.targetId, templateKey: rule.templateKey,
+      priority: rule.priority, copies: 1, isActive: true,
+    }] : [];
+    return outputs.map((output) => ({
+      ...output, ruleId: rule.id, ruleName: rule.name, event: rule.event,
+      isActive: rule.isActive,
+    }));
+  }).sort((a, b) => a.priority - b.priority || a.id - b.id);
 };
 
 const createBatch = async (data, clinicId, requestedById) => {
@@ -401,7 +506,7 @@ module.exports = {
   createLocation, createAgent, createProfile, createPrinter, createTarget,
   createTemplate, deleteTemplate, createTemplateVersion, activateTemplateVersion, deleteDraftTemplateVersion, deactivateResource, updateResource, createAsset, createBatch, listBatches,
   buildContract, recalculateBatch, markJobSent, markJobPrinted, markJobFailed, retryJob, cancelJob, sendJobToAgent,
-  listRules, createRule, updateRule, deleteRule, findRulesByEvent: repository.findRulesByEvent,
+  listRules, createRule, updateRule, deleteRule, findRulesByEvent,
   listLocations: repository.listLocations, listAgents: repository.listAgents, listProfiles: repository.listProfiles,
   listPrinters: repository.listPrinters, listTargets: repository.listTargets, listTemplates: repository.listTemplates,
   listAssets: repository.listAssets

@@ -25,7 +25,9 @@ app.use(express.json({ limit: '1mb' }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  // The global API limit is shared by every user behind the same public IP.
+  // Multi-resource admin screens make several legitimate reads per visit.
+  max: 300,
   message: { error: 'Too many requests, please try again later' }
 });
 app.use('/api', limiter);

@@ -561,6 +561,35 @@ describe('Sale Service', () => {
       expect(result).toEqual({ message: 'Venta cancelada exitosamente' });
     });
 
+    it('despacha las salidas configuradas para cancelación después de confirmar la operación', async () => {
+      const saleId = faker.number.int();
+      const saleSnapshot = {
+        id: saleId,
+        createdAt: new Date(),
+        client: { name: 'Cliente', phone: '123', documentId: 'DOC-1' },
+        saleItems: [{ itemId: 8, nameSnapshot: 'Producto', quantity: 1, unitPrice: 20, subtotal: 20, taxAmount: 0 }],
+        payments: [{ method: 'CASH', amount: 20 }],
+        subtotal: 20,
+        discount: 0,
+        tax: 0,
+        total: 20,
+      };
+      mockPrintingService.findRulesByEvent.mockResolvedValue([{ targetId: 3, templateKey: 'refund-ticket' }]);
+      mockSaleRepository.findById.mockResolvedValue(saleSnapshot);
+      mockSaleRepository.cancelSaleAtomic.mockResolvedValue({ message: 'Venta cancelada exitosamente' });
+      mockPrintingService.createBatch.mockResolvedValue({ jobs: [{ id: 44 }] });
+      mockPrintingService.sendJobToAgent.mockResolvedValue({});
+
+      await saleService.cancelSale(saleId, organizationId, 7, 'Anulación');
+
+      expect(mockPrintingService.createBatch).toHaveBeenCalledWith(expect.objectContaining({
+        sourceDocumentType: 'CANCELLATION',
+        sourceDocumentId: String(saleId),
+        jobs: [{ targetId: 3, templateKey: 'refund-ticket' }],
+      }), organizationId, 7);
+      expect(mockPrintingService.sendJobToAgent).toHaveBeenCalledWith(44, organizationId);
+    });
+
     it('debería lanzar error si la venta ya está cancelada', async () => {
       // Arrange
       const saleId = faker.number.int();
@@ -594,8 +623,8 @@ describe('Sale Service', () => {
         print: { id: 1, type: 'ORIGINAL', reprintNumber: 0 },
       });
       mockSaleRepository.findById.mockResolvedValue(sale);
-      mockPrintingService.findRulesByEvent.mockResolvedValue([{ targetId: 12, templateKey: 'sale-default' }]);
-      mockPrintingService.createBatch.mockResolvedValue({ jobs: [{ id: 44 }] });
+      mockPrintingService.findRulesByEvent.mockResolvedValue([{ targetId: 12, templateKey: 'sale-default', copies: 2 }]);
+      mockPrintingService.createBatch.mockResolvedValue({ jobs: [{ id: 44 }, { id: 45 }] });
       mockPrintingService.sendJobToAgent.mockResolvedValue({});
 
       const result = await saleService.printSale(80, organizationId, 7);
@@ -610,9 +639,10 @@ describe('Sale Service', () => {
       expect(result.printData.payments).toEqual([{ method: 'CASH', amount: 114 }]);
       expect(mockPrintingService.createBatch).toHaveBeenCalledWith(expect.objectContaining({
         variant: 'ORIGINAL',
-        jobs: [{ targetId: 12, templateKey: 'sale-default' }],
+        jobs: [{ targetId: 12, templateKey: 'sale-default' }, { targetId: 12, templateKey: 'sale-default' }],
       }), organizationId, 7);
       expect(mockPrintingService.sendJobToAgent).toHaveBeenCalledWith(44, organizationId);
+      expect(mockPrintingService.sendJobToAgent).toHaveBeenCalledWith(45, organizationId);
     });
 
     it('should label subsequent prints as duplicate', async () => {

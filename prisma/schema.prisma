@@ -118,41 +118,41 @@ model RefreshToken {
 }
 
 model Product {
-  id             Int                 @id @default(autoincrement())
-  name           String
-  description    String?
-  sku            String?             @unique
-  barcode        String?
-  brand          String?
-  supplier       String?
-  supplierId     Int?                @map("supplier_id")
-  unit           String?             @db.VarChar(50)
-  activeIngredient String?            @db.VarChar(191)
-  concentration  String?              @db.VarChar(191)
-  dosageForm     String?              @db.VarChar(100)
-  laboratory     String?              @db.VarChar(191)
-  indicatedSpecies String?             @db.VarChar(191)
-  administrationRoute String?          @db.VarChar(100)
+  id                   Int                 @id @default(autoincrement())
+  name                 String
+  description          String?
+  sku                  String?             @unique
+  barcode              String?
+  brand                String?
+  supplier             String?
+  supplierId           Int?                @map("supplier_id")
+  unit                 String?             @db.VarChar(50)
+  activeIngredient     String?             @db.VarChar(191)
+  concentration        String?             @db.VarChar(191)
+  dosageForm           String?             @db.VarChar(100)
+  laboratory           String?             @db.VarChar(191)
+  indicatedSpecies     String?             @db.VarChar(191)
+  administrationRoute  String?             @db.VarChar(100)
   requiresPrescription Boolean?
-  categoryId     Int?                @map("category_id")
-  subcategoryId  Int?                @map("subcategory_id")
-  priceType      ProductPriceType    @default(FIXED)
-  price          Float
-  ivaIncluded    Boolean             @default(true)
-  cost           Float?
-  stock          Int                 @default(0)
-  minStock       Int                 @default(5)
-  maxStock       Int?
-  isActive       Boolean             @default(true)
-  discontinuedAt DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  clinicId       Int
-  category       ProductCategory?    @relation(fields: [categoryId], references: [id])
-  subcategory    ProductSubcategory? @relation(fields: [subcategoryId], references: [id])
-  supplierRecord Supplier?           @relation(fields: [supplierId, clinicId], references: [id, clinicId], onDelete: Restrict, map: "products_supplier_clinic_fkey")
-  clinic         Clinic              @relation(fields: [clinicId], references: [id])
-  stockMovements StockMovement[]
+  categoryId           Int?                @map("category_id")
+  subcategoryId        Int?                @map("subcategory_id")
+  priceType            ProductPriceType    @default(FIXED)
+  price                Float
+  ivaIncluded          Boolean             @default(true)
+  cost                 Float?
+  stock                Int                 @default(0)
+  minStock             Int                 @default(5)
+  maxStock             Int?
+  isActive             Boolean             @default(true)
+  discontinuedAt       DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  clinicId             Int
+  category             ProductCategory?    @relation(fields: [categoryId], references: [id])
+  subcategory          ProductSubcategory? @relation(fields: [subcategoryId], references: [id])
+  supplierRecord       Supplier?           @relation(fields: [supplierId, clinicId], references: [id, clinicId], onDelete: Restrict, map: "products_supplier_clinic_fkey")
+  clinic               Clinic              @relation(fields: [clinicId], references: [id])
+  stockMovements       StockMovement[]
 
   @@index([categoryId], map: "products_category_id_fkey")
   @@index([subcategoryId], map: "products_subcategory_id_fkey")
@@ -162,20 +162,20 @@ model Product {
 }
 
 model Supplier {
-  id           Int       @id @default(autoincrement())
-  name         String    @db.VarChar(191)
-  rut          String?   @db.VarChar(50)
-  contactName  String?   @db.VarChar(191)
-  phone        String?   @db.VarChar(50)
-  email        String?   @db.VarChar(191)
-  address      String?   @db.VarChar(255)
-  notes        String?   @db.Text
-  isActive     Boolean   @default(true)
-  clinicId     Int       @map("clinic_id")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  clinic       Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  products     Product[]
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(191)
+  rut         String?   @db.VarChar(50)
+  contactName String?   @db.VarChar(191)
+  phone       String?   @db.VarChar(50)
+  email       String?   @db.VarChar(191)
+  address     String?   @db.VarChar(255)
+  notes       String?   @db.Text
+  isActive    Boolean   @default(true)
+  clinicId    Int       @map("clinic_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  clinic      Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  products    Product[]
 
   @@unique([clinicId, name], map: "suppliers_clinic_id_name_key")
   @@unique([clinicId, rut], map: "suppliers_clinic_id_rut_key")
@@ -187,7 +187,7 @@ model Supplier {
 model ProductCategory {
   id            Int                  @id @default(autoincrement())
   name          String
-  type          String               @default("PRODUCTO") @db.VarChar(32) @map("category_type")
+  type          String               @default("PRODUCTO") @map("category_type") @db.VarChar(32)
   description   String?
   isActive      Boolean              @default(true)
   createdAt     DateTime             @default(now())
@@ -1017,21 +1017,43 @@ model Printer {
 }
 
 model PrintRule {
-  id           Int      @id @default(autoincrement())
-  clinicId     Int
-  event        String   // Ej: 'SALE', 'PRESCRIPTION'
-  targetId     Int
-  templateKey  String
-  isActive     Boolean  @default(true)
-  priority     Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  clinicId    Int
+  name        String   @default("")
+  event       String // Ej: 'SALE', 'PRESCRIPTION'
+  targetId    Int?
+  templateKey String?
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  clinic       Clinic       @relation(fields: [clinicId], references: [id])
-  target       PrintTarget @relation(fields: [targetId], references: [id])
+  clinic  Clinic            @relation(fields: [clinicId], references: [id])
+  target  PrintTarget?      @relation(fields: [targetId], references: [id])
+  outputs PrintRuleOutput[]
 
-  @@index([clinicId, event])
+  @@unique([clinicId, event, name])
   @@map("print_rules")
+}
+
+model PrintRuleOutput {
+  id          Int      @id @default(autoincrement())
+  ruleId      Int
+  name        String
+  targetId    Int
+  templateKey String
+  priority    Int      @default(0)
+  copies      Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rule   PrintRule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  target PrintTarget @relation(fields: [targetId], references: [id])
+
+  @@index([ruleId, isActive, priority])
+  @@index([targetId])
+  @@map("print_rule_outputs")
 }
 
 model PrintTarget {
@@ -1045,11 +1067,12 @@ model PrintTarget {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  clinic   Clinic        @relation(fields: [clinicId], references: [id])
-  location PrintLocation @relation(fields: [locationId], references: [id])
-  printer  Printer?      @relation(fields: [printerId], references: [id])
-  jobs     PrintJob[]
-  rules    PrintRule[]
+  clinic      Clinic            @relation(fields: [clinicId], references: [id])
+  location    PrintLocation     @relation(fields: [locationId], references: [id])
+  printer     Printer?          @relation(fields: [printerId], references: [id])
+  jobs        PrintJob[]
+  rules       PrintRule[]
+  ruleOutputs PrintRuleOutput[]
 
   @@unique([clinicId, code])
   @@index([clinicId])

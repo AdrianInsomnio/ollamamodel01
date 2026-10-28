@@ -4,11 +4,51 @@ const listLocations = (clinicId) => prisma.printLocation.findMany({ where: { cli
 const createLocation = (data, clinicId) => prisma.printLocation.create({ data: { ...data, clinicId } });
 const findLocation = (id, clinicId) => prisma.printLocation.findFirst({ where: { id, clinicId, isActive: true } });
 
-const listRules = (clinicId) => prisma.printRule.findMany({ where: { clinicId }, orderBy: { priority: 'asc' } });
-const createRule = (data, clinicId) => prisma.printRule.create({ data: { ...data, clinicId } });
-const updateRule = (id, data, clinicId) => prisma.printRule.updateMany({ where: { id, clinicId }, data });
+const ruleInclude = {
+  outputs: {
+    orderBy: [{ priority: 'asc' }, { id: 'asc' }],
+    include: { target: { include: { location: true, printer: { include: { printAgent: true, profile: true } } } } }
+  }
+};
+const listRules = (clinicId) => prisma.printRule.findMany({ where: { clinicId }, include: ruleInclude, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] });
+const createRule = (data, clinicId) => prisma.printRule.create({
+  data: {
+    clinicId, name: data.name, event: data.event, isActive: data.isActive,
+    priority: data.priority,
+    outputs: { create: data.outputs.map(({ name, targetId, templateKey, priority, copies, isActive }) => ({ name, targetId, templateKey, priority, copies, isActive })) }
+  },
+  include: ruleInclude
+});
+const updateRule = (id, data, clinicId) => prisma.$transaction(async (tx) => {
+  const existing = await tx.printRule.findFirst({ where: { id, clinicId }, include: { outputs: { orderBy: [{ priority: 'asc' }, { id: 'asc' }] } } });
+  if (!existing) return { count: 0, rule: null };
+
+  const parentUpdate = Object.fromEntries(['name', 'event', 'isActive', 'priority'].filter((key) => data[key] !== undefined).map((key) => [key, data[key]]));
+  if (data.outputs) {
+    await tx.printRuleOutput.deleteMany({ where: { ruleId: id } });
+    await tx.printRuleOutput.createMany({ data: data.outputs.map((output) => ({
+      ruleId: id, name: output.name, targetId: output.targetId, templateKey: output.templateKey,
+      priority: output.priority, copies: output.copies, isActive: output.isActive
+    })) });
+  } else if (data.targetId !== undefined || data.templateKey !== undefined || data.outputName !== undefined || data.copies !== undefined) {
+    const first = existing.outputs[0];
+    const outputUpdate = Object.fromEntries(
+      [['targetId', data.targetId], ['templateKey', data.templateKey], ['name', data.outputName], ['priority', data.priority], ['copies', data.copies], ['isActive', data.outputIsActive]]
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [key === 'outputName' ? 'name' : key === 'outputIsActive' ? 'isActive' : key, value])
+    );
+    if (first) await tx.printRuleOutput.update({ where: { id: first.id }, data: outputUpdate });
+    else if (data.targetId && data.templateKey) await tx.printRuleOutput.create({ data: {
+      ruleId: id, name: data.outputName || `Salida ${id}`, targetId: data.targetId, templateKey: data.templateKey,
+      priority: data.priority ?? 0, copies: data.copies ?? 1, isActive: data.outputIsActive ?? true
+    } });
+  }
+  if (Object.keys(parentUpdate).length) await tx.printRule.update({ where: { id }, data: parentUpdate });
+  const rule = await tx.printRule.findFirst({ where: { id, clinicId }, include: ruleInclude });
+  return { count: 1, rule };
+});
 const deleteRule = (id, clinicId) => prisma.printRule.deleteMany({ where: { id, clinicId } });
-const findRulesByEvent = (clinicId, event) => prisma.printRule.findMany({ where: { clinicId, event, isActive: true }, orderBy: { priority: 'asc' } });
+const findRulesByEvent = (clinicId, event) => prisma.printRule.findMany({ where: { clinicId, event, isActive: true }, include: ruleInclude, orderBy: [{ priority: 'asc' }, { id: 'asc' }] });
 
 const listAgents = (clinicId) => prisma.printAgent.findMany({ where: { clinicId }, include: { location: true }, orderBy: { name: 'asc' } });
 const createAgent = (data, clinicId) => prisma.printAgent.create({ data: { ...data, clinicId } });
@@ -47,7 +87,9 @@ const deleteTemplate = async (id, clinicId) => prisma.$transaction(async (tx) =>
     ? await tx.printJob.count({ where: { templateVersionId: { in: versionIds } } })
     : 0;
   if (linkedJobs) return { linkedJobs };
-  await tx.printRule.deleteMany({ where: { clinicId, templateKey: template.templateKey } });
+  await tx.printRuleOutput.deleteMany({ where: { templateKey: template.templateKey, rule: { clinicId } } });
+  const emptyRules = await tx.printRule.findMany({ where: { clinicId, outputs: { none: {} } }, select: { id: true } });
+  if (emptyRules.length) await tx.printRule.deleteMany({ where: { clinicId, id: { in: emptyRules.map((rule) => rule.id) } } });
   await tx.printTemplateVersion.deleteMany({ where: { templateId: id } });
   await tx.printTemplate.delete({ where: { id } });
   return { id, deleted: true };
@@ -71,7 +113,11 @@ const createAsset = (data, clinicId) => prisma.printAsset.create({ data: { ...da
 const findClinic = (clinicId) => prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true, name: true } });
 const findTarget = (id, clinicId) => prisma.printTarget.findFirst({
   where: { id, clinicId, isActive: true },
-  include: { printer: { include: { printAgent: true, profile: true } } }
+  include: { location: true, printer: { include: { printAgent: true, profile: true } } }
+});
+const findTargetForRule = (id, clinicId) => prisma.printTarget.findFirst({
+  where: { id, clinicId },
+  include: { location: true, printer: { include: { printAgent: true, profile: true } } }
 });
 const findPrinter = (id, clinicId) => prisma.printer.findFirst({ where: { id, clinicId, isActive: true }, include: { printAgent: true, profile: true } });
 const findTemplateVersion = (id, clinicId) => prisma.printTemplateVersion.findFirst({
@@ -79,6 +125,8 @@ const findTemplateVersion = (id, clinicId) => prisma.printTemplateVersion.findFi
   include: { template: true }
 });
 const findTemplate = (id, clinicId) => prisma.printTemplate.findFirst({ where: { id, clinicId, isActive: true } });
+const findTemplateByKey = (templateKey, clinicId) => prisma.printTemplate.findFirst({ where: { clinicId, templateKey, isActive: true } });
+const findTemplateByKeyForRule = (templateKey, clinicId) => prisma.printTemplate.findFirst({ where: { clinicId, templateKey } });
 const findActiveTemplateVersionByKey = (templateKey, clinicId) => prisma.printTemplateVersion.findFirst({
   where: { status: 'ACTIVE', template: { clinicId, templateKey, isActive: true } },
   include: { template: true }
@@ -127,6 +175,6 @@ module.exports = {
   listTargets, createTarget,
     listTemplates, createTemplate, deleteTemplate, createTemplateVersion, deleteDraftTemplateVersion,
   listAssets, createAsset,
-  findClinic, findTarget, findPrinter, findTemplate, findTemplateVersion, findActiveTemplateVersionByKey,
+  findClinic, findTarget, findTargetForRule, findPrinter, findTemplate, findTemplateByKey, findTemplateByKeyForRule, findTemplateVersion, findActiveTemplateVersionByKey,
   createBatch, activateTemplateVersion, listBatches, findBatch, findJob, updateJob, updateBatchStatus, deactivateResource, updateResource
 };

@@ -4,7 +4,14 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findTarget: jest.fn(),
   findPrinter: jest.fn(),
   findTemplate: jest.fn(),
+  findTemplateByKey: jest.fn(),
+  findActiveTemplateVersionByKey: jest.fn(),
   findTemplateVersion: jest.fn(),
+  listRules: jest.fn(),
+  createRule: jest.fn(),
+  updateRule: jest.fn(),
+  deleteRule: jest.fn(),
+  findRulesByEvent: jest.fn(),
   createBatch: jest.fn(),
   activateTemplateVersion: jest.fn(),
   deactivateResource: jest.fn(),
@@ -156,5 +163,59 @@ describe('printing core service', () => {
   test('rejects an empty or unsupported configuration update', async () => {
     await expect(service.updateResource('printers', 30, { paperSize: 'A4' }, 7))
       .rejects.toMatchObject({ code: 'PRINT_UPDATE_EMPTY', statusCode: 400 });
+  });
+
+  test('creates an event rule with multiple validated outputs scoped to the clinic', async () => {
+    repository.findTarget.mockResolvedValue({ id: 20, name: 'Caja', isActive: true, printer: { paperType: 'THERMAL', paperSize: 'THERMAL_80' } });
+    repository.findTemplateByKey.mockResolvedValue({ id: 60, name: 'Ticket POS', isActive: true });
+    repository.findActiveTemplateVersionByKey.mockResolvedValue({ paperType: 'THERMAL', paperSize: 'THERMAL_80' });
+    repository.createRule.mockResolvedValue({ id: 99, name: 'Venta y preparación', outputs: [] });
+
+    await service.createRule({
+      name: 'Venta y preparación',
+      event: 'SALE',
+      isActive: true,
+      priority: 0,
+      outputs: [
+        { name: 'Ticket POS', targetId: 20, templateKey: 'sale-pos', priority: 1, copies: 2, isActive: true },
+        { name: 'Orden de cocina', targetId: 20, templateKey: 'kitchen-order', priority: 2, copies: 1, isActive: true },
+      ],
+    }, 7);
+
+    expect(repository.findTarget).toHaveBeenCalledWith(20, 7);
+    expect(repository.findTemplateByKey).toHaveBeenCalledWith('sale-pos', 7);
+    expect(repository.createRule).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Venta y preparación',
+      event: 'SALE',
+      outputs: expect.arrayContaining([
+        expect.objectContaining({ targetId: 20, templateKey: 'sale-pos', copies: 2 }),
+        expect.objectContaining({ targetId: 20, templateKey: 'kitchen-order', copies: 1 }),
+      ]),
+    }), 7);
+  });
+
+  test('rejects active rules for events without an integrated business flow', async () => {
+    await expect(service.createRule({
+      name: 'Cierre de turno', event: 'CASH_SHIFT_CLOSED', isActive: true,
+      outputs: [{ name: 'Cierre', targetId: 20, templateKey: 'close-slip', priority: 0, copies: 1, isActive: true }],
+    }, 7)).rejects.toMatchObject({ code: 'PRINT_EVENT_UNSUPPORTED', statusCode: 400 });
+  });
+
+  test('flattens active outputs in priority order for the existing event dispatch flow', async () => {
+    repository.findRulesByEvent.mockResolvedValue([{
+      id: 4, name: 'Venta finalizada', event: 'SALE', isActive: true,
+      outputs: [
+        { id: 40, name: 'Depósito', targetId: 22, templateKey: 'stock-list', priority: 3, copies: 1, isActive: true },
+        { id: 39, name: 'POS', targetId: 20, templateKey: 'sale-pos', priority: 1, copies: 2, isActive: true },
+        { id: 41, name: 'Inactiva', targetId: 24, templateKey: 'inactive', priority: 0, copies: 1, isActive: false },
+      ],
+    }]);
+
+    const outputs = await service.findRulesByEvent(7, 'SALE');
+
+    expect(outputs.map(({ name, priority, copies }) => ({ name, priority, copies }))).toEqual([
+      { name: 'POS', priority: 1, copies: 2 },
+      { name: 'Depósito', priority: 3, copies: 1 },
+    ]);
   });
 });
