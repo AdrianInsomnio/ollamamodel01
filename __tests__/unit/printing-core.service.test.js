@@ -1,6 +1,8 @@
 jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   findClinic: jest.fn(),
+  findAgent: jest.fn(),
   findTarget: jest.fn(),
+  findPrinter: jest.fn(),
   findTemplate: jest.fn(),
   findTemplateVersion: jest.fn(),
   createBatch: jest.fn(),
@@ -12,9 +14,11 @@ jest.mock('../../src/modules/printing-core/printing.repository', () => ({
   updateJob: jest.fn(),
   updateBatchStatus: jest.fn()
 }));
+jest.mock('axios', () => ({ post: jest.fn() }));
 
 const repository = require('../../src/modules/printing-core/printing.repository');
 const service = require('../../src/modules/printing-core/printing.service');
+const axios = require('axios');
 
 describe('printing core service', () => {
   test('builds a versioned agnostic print contract', () => {
@@ -95,8 +99,14 @@ describe('printing core service', () => {
   });
 
   test('retries a failed job and recalculates the batch as processing', async () => {
-    repository.findJob.mockResolvedValue({ id: 91, clinicId: 7, batchId: 70, status: 'FAILED' });
+    repository.findJob
+      .mockResolvedValueOnce({ id: 91, clinicId: 7, batchId: 70, status: 'FAILED' })
+      .mockResolvedValueOnce({ id: 91, clinicId: 7, batchId: 70, status: 'RETRYING', printerId: 30 })
+      .mockResolvedValueOnce({ id: 91, clinicId: 7, batchId: 70, status: 'RETRYING' });
     repository.findBatch.mockResolvedValue({ id: 70, jobs: [{ status: 'RETRYING' }] });
+    repository.findPrinter.mockResolvedValue({ id: 30, printAgentId: 40 });
+    repository.findAgent.mockResolvedValue({ id: 40, status: 'ONLINE', endpoint: 'http://agent', apiKey: 'test-key' });
+    axios.post.mockResolvedValue({ status: 202 });
 
     const result = await service.retryJob(91, 7);
 

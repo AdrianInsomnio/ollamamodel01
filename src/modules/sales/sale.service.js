@@ -450,13 +450,19 @@ const buildPrintData = (sale, print) => ({
 });
 
 const printSale = async (saleId, clinicId, userId, reason) => {
-  const sale = await getById(saleId, clinicId);
-  if (!sale) throw new AppError('Venta no encontrada', 404);
+  const existingSale = await repository.findById(saleId, clinicId);
+  if (!existingSale) throw new AppError('Venta no encontrada', 404);
+  const precheckedRules = await printingService.findRulesByEvent(clinicId, 'SALE');
+  if (!precheckedRules || precheckedRules.length === 0) {
+    throw new AppError('No hay reglas de impresión configuradas para ventas', 404, 'PRINT_RULES_NOT_FOUND');
+  }
 
-  const variant = reason === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL';
+  const registered = await repository.createTicketPrintAtomic({ saleId: Number(saleId), clinicId, userId, reason });
+  const { sale, print } = registered;
+  const variant = print.type === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL';
 
   // 1. Buscar reglas de impresión activas para el evento SALE
-  const rules = await printingService.findRulesByEvent(clinicId, 'SALE');
+  const rules = precheckedRules;
   if (!rules || rules.length === 0) {
     throw new AppError('No hay reglas de impresión configuradas para ventas', 404, 'PRINT_RULES_NOT_FOUND');
   }
@@ -475,14 +481,25 @@ const printSale = async (saleId, clinicId, userId, reason) => {
   const batchData = {
     sourceDocumentType: 'SALE',
     sourceDocumentId: String(sale.id),
+    documentNumber: String(sale.id),
+    documentDate: sale.createdAt,
     variant,
     reason,
     requestedById: userId,
     customer: { 
       name: sale.client?.name, 
       phone: sale.client?.phone,
-      document: sale.client?.document 
+      document: sale.client?.documentId
     },
+    items: (sale.saleItems || []).map(item => ({
+      code: String(item.itemId),
+      name: item.nameSnapshot,
+      description: item.nameSnapshot,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unitPrice ?? item.priceSnapshot ?? 0),
+      total: Number(item.subtotal ?? 0),
+      tax: Number(item.taxAmount || 0),
+    })),
     totals: { 
       subtotal: sale.subtotal, 
       discount: sale.discount, 
@@ -498,6 +515,9 @@ const printSale = async (saleId, clinicId, userId, reason) => {
     footer: { notes: sale.notes },
     context: { 
       petName: sale.pet?.name,
+      status: sale.status,
+      createdAt: sale.createdAt,
+      cashShift: sale.cashShiftId,
       sellerName: sale.userId ? 'Vendedor' : 'Sistema' 
     },
     jobs: jobs.map(job => ({
@@ -509,13 +529,14 @@ const printSale = async (saleId, clinicId, userId, reason) => {
 
   // 4. Crear el Batch a través del Printing Core
   const batch = await printingService.createBatch(batchData, clinicId, userId);
+  await Promise.all(batch.jobs.map(job => printingService.sendJobToAgent(job.id, clinicId)));
   const mainJob = batch.jobs[0];
 
   // 5. Retorno compatible con el frontend legacy
   const legacyPrint = { 
-    id: mainJob.id, 
-    type: variant, 
-    reprintNumber: mainJob.attemptCount 
+    id: print.id,
+    type: print.type,
+    reprintNumber: print.reprintNumber
   };
   
   return {

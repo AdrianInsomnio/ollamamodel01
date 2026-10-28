@@ -25,7 +25,7 @@ const create = async (data, clinicId) => {
       }
     },
     include: {
-      client: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true, documentId: true, phone: true } },
       pet: { select: { id: true, name: true } },
       saleItems: true
     }
@@ -174,7 +174,7 @@ const findById = async (id, clinicId) => {
   return await prisma.sale.findFirst({
     where: { id, clinicId },
     include: {
-      client: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true, documentId: true, phone: true } },
       pet: { select: { id: true, name: true } },
       consultation: true,
       saleItems: true,

@@ -11,6 +11,11 @@ jest.mock('../../../src/modules/sales/sale.repository');
 jest.mock('../../../src/modules/products/product.repository');
 jest.mock('../../../src/modules/clients/client.repository');
 jest.mock('../../../src/modules/cash/register/cashregister.repository');
+jest.mock('../../../src/modules/printing-core/printing.service', () => ({
+  findRulesByEvent: jest.fn(),
+  createBatch: jest.fn(),
+  sendJobToAgent: jest.fn(),
+}));
 jest.mock('../../../src/lib/prisma', () => ({
   prisma: {
     pet: {
@@ -24,6 +29,7 @@ const mockSaleRepository = jest.mocked(saleRepository);
 const mockProductRepository = jest.mocked(productRepository);
 const mockClientRepository = jest.mocked(clientRepository);
 const mockCashRegisterRepository = jest.mocked(cashRegisterRepository);
+const mockPrintingService = jest.mocked(require('../../../src/modules/printing-core/printing.service'));
 
 describe('Sale Service', () => {
   let organizationId;
@@ -587,6 +593,10 @@ describe('Sale Service', () => {
         sale,
         print: { id: 1, type: 'ORIGINAL', reprintNumber: 0 },
       });
+      mockSaleRepository.findById.mockResolvedValue(sale);
+      mockPrintingService.findRulesByEvent.mockResolvedValue([{ targetId: 12, templateKey: 'sale-default' }]);
+      mockPrintingService.createBatch.mockResolvedValue({ jobs: [{ id: 44 }] });
+      mockPrintingService.sendJobToAgent.mockResolvedValue({});
 
       const result = await saleService.printSale(80, organizationId, 7);
 
@@ -598,6 +608,11 @@ describe('Sale Service', () => {
       });
       expect(result.printData.type).toBe('TICKET ORIGINAL');
       expect(result.printData.payments).toEqual([{ method: 'CASH', amount: 114 }]);
+      expect(mockPrintingService.createBatch).toHaveBeenCalledWith(expect.objectContaining({
+        variant: 'ORIGINAL',
+        jobs: [{ targetId: 12, templateKey: 'sale-default' }],
+      }), organizationId, 7);
+      expect(mockPrintingService.sendJobToAgent).toHaveBeenCalledWith(44, organizationId);
     });
 
     it('should label subsequent prints as duplicate', async () => {
@@ -605,6 +620,10 @@ describe('Sale Service', () => {
         sale: { id: 81, saleItems: [], payments: [], total: 0 },
         print: { id: 2, type: 'DUPLICATE', reprintNumber: 1 },
       });
+      mockSaleRepository.findById.mockResolvedValue({ id: 81 });
+      mockPrintingService.findRulesByEvent.mockResolvedValue([{ targetId: 12, templateKey: 'sale-default' }]);
+      mockPrintingService.createBatch.mockResolvedValue({ jobs: [{ id: 45 }] });
+      mockPrintingService.sendJobToAgent.mockResolvedValue({});
 
       const result = await saleService.printSale(81, organizationId, 7, 'Cliente solicita copia');
 
